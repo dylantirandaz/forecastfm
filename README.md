@@ -83,12 +83,18 @@ export TINKER_API_KEY="your-actual-key"
 python -c 'import os; assert os.getenv("TINKER_API_KEY"); print("Tinker key is set")'
 ```
 
+Alternatively, put it in the ignored local `.env` file:
+
+```text
+TINKER_API_KEY="your-actual-key"
+```
+
 Build the real data and start the one-step smoke test:
 
 ```bash
 uv run --extra tinker python examples/build_real_nba_dataset.py
 uv run --extra tinker python examples/freeze_training_lock.py
-uv run --extra tinker python examples/train_tinker_sft.py
+uv run --extra tinker python -m examples.run_tinker_sft_local
 uv run --extra tinker python examples/freeze_experiment.py
 ```
 
