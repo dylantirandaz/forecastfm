@@ -1,0 +1,65 @@
+{
+  "code_files": {
+    "examples/train_tinker_sft.py": "8fabbfea2ae68cfc7b0f633999a948cd13493336ab04a661979f1487c72162ce",
+    "src/forecastfm/prompting.py": "5003d9e57d4a1c90c63ee414e8615f139dbb60b1a4bf2aa335208b6fa3a2d410",
+    "src/forecastfm/run_config.py": "724bba74ab1b748bf009ceb1ed3a1100ae98cacc41fd8f7c2d865d37cf3f7f02"
+  },
+  "code_revision": "785cf273e668ab2388bd3ff1b80ffeebd7a3515d",
+  "created_at": "2026-07-12T02:19:53.862333+00:00",
+  "data": {
+    "manifest_path": "data/processed/manifest.json",
+    "manifest_sha256": "7cdc6959011c0f7526e626c63b55cef33553805c195c30fe2eac86b52d61c025",
+    "training_path": "data/processed/nba_elo_train_sft.jsonl",
+    "training_sha256": "d7cbc3a1a5baaeed37161e859e52caa060aef647d1218f5bbaee737d136eee6f"
+  },
+  "decoding": {
+    "malformed_output_policy": "record_and_score_invalid",
+    "max_attempts": 1,
+    "max_tokens": 128,
+    "num_samples": 1,
+    "seed": 0,
+    "temperature": 0.0,
+    "tools_enabled": false,
+    "top_k": -1,
+    "top_p": 1.0
+  },
+  "kind": "forecastfm_training_lock",
+  "model": {
+    "base_model": "Qwen/Qwen3.5-4B",
+    "chat_template_sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+    "provider": "Tinker",
+    "renderer": "qwen3_5",
+    "server_weight_revision": null,
+    "server_weight_revision_note": "Tinker exposes a catalog model name, not a base-weight digest. The final sampler path is the authoritative trained policy identity.",
+    "tokenizer_config_sha256": "316230d6a809701f4db5ea8f8fc862bc3a6f3229c937c174e674ff3ca0a64ac8",
+    "tokenizer_hugging_face_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+    "tokenizer_json_sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+  },
+  "model_reference_sha256": "935a7d9d2e5c322b5e8ad79d7e42eab9052211d53c129084d32f37e90d923a4d",
+  "packages": {
+    "tinker": "0.22.7",
+    "tinker_cookbook": "0.4.3"
+  },
+  "prompt": {
+    "model_input_schema_version": 2,
+    "prompting_module_sha256": "5003d9e57d4a1c90c63ee414e8615f139dbb60b1a4bf2aa335208b6fa3a2d410",
+    "system_prompt": "You are ForecastFM, a calibrated probabilistic forecaster.\nUse only the prior and evidence supplied to you.\nReturn valid JSON with exactly one key: probabilities.\nThe probabilities must use every outcome exactly once and sum to one.",
+    "system_prompt_sha256": "462c4d5ff36b645a5e7285123c7843685136f16dfa0755e1f08f8ab7ac5c9131"
+  },
+  "schema_version": 1,
+  "status": "awaiting_trained_sampler",
+  "training": {
+    "batch_size": 8,
+    "eval_every": 0,
+    "infrequent_eval_every": 0,
+    "learning_rate": 0.0002,
+    "lora_rank": 16,
+    "max_length": 2048,
+    "max_steps": 1,
+    "num_epochs": 1,
+    "save_every": 0,
+    "submit_ahead": 0,
+    "train_on": "last_assistant_message"
+  },
+  "uv_lock_sha256": "3edf0756f7d82977313fed2c7d452be5138f4a6ef7543a47c6b784b963a6deb5"
+}
