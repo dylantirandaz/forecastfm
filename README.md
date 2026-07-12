@@ -105,6 +105,38 @@ and checkpoint metadata are written under the ignored `artifacts/` directory. Th
 creates a forecast-ready experiment lock from Tinker's permanent sampler path. Never place the API
 key in a source file.
 
+## Paired validation canary
+
+The next gate is a frozen 64-game validation canary. Selection uses only the lexicographically
+first 64 opaque validation IDs; it never opens answers. Each game has one original and one
+deterministic side-swapped prompt, so the base and adapter each receive 128 prompts under identical
+decoding settings.
+
+The workflow is deliberately two-phase:
+
+```bash
+# Freeze and publish the answer-free call plan.
+uv run python examples/build_validation_canary.py
+git add evaluation/validation_canary
+git commit -m "Freeze validation canary"
+git push origin main
+
+# Billable: generate exactly once and seal both raw model outputs.
+uv run --extra tinker python -m examples.run_tinker_canary
+git add evaluation/validation_canary/raw
+git commit -m "Seal validation canary generations"
+git push origin main
+
+# Only now may historical answers be opened for secondary diagnostics.
+uv run python examples/score_validation_canary.py
+```
+
+Primary metrics—strict JSON validity, prompt-derived Elo-oracle error, and side-swap consistency—
+are answer-free. Missing or malformed rows remain in the denominator with fixed worst-case
+penalties. Brier score, log loss, and teacher-target error are loaded only after raw outputs are
+hash-sealed and published. Side swaps are never counted as extra historical games. The test split
+is not used by this workflow.
+
 ## Design rules
 
 - All timestamps are timezone-aware.
@@ -137,6 +169,8 @@ key in a source file.
 - `run_config.py`: explicit model, tokenizer, training, and decoding settings.
 - `run_lock.py`: immutable training and trained-sampler experiment locks.
 - `ledger.py`: prospective cohort validation and append-only hash-chain verification.
+- `canary.py`: frozen validation call plans, generation records, seals, and answer-free metrics.
+- `canary_history.py`: answer-gated historical diagnostics for already sealed generations.
 
 ## Next milestones
 

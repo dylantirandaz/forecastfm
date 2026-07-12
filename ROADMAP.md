@@ -18,8 +18,8 @@ Each milestone must produce a measurable forecasting improvement before the next
 
 - Pin the Tinker SDK and Cookbook versions.
 - Convert exported conversations with the model's official renderer.
-- Prove the pipeline with one `Qwen/Qwen3.5-4B` LoRA step, then scale to 9B.
-- Save the adapter, training metrics, configuration, and data hashes.
+- Prove the pipeline with one `Qwen/Qwen3.5-4B` LoRA step. — complete
+- Save the adapter, training metrics, configuration, and data hashes. — complete
 - Compare base and adapter on the exact same anonymous, complete cohort.
 - Freeze every raw response before loading the answer key.
 - Report JSON validity and error against the closed-form Elo oracle.
