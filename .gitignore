@@ -1,0 +1,14 @@
+.DS_Store
+.pytest_cache/
+.ruff_cache/
+.venv/
+__pycache__/
+*.egg-info/
+build/
+dist/
+artifacts/
+data/*
+!data/processed/
+data/processed/*
+!data/processed/manifest.json
+examples/generated/

@@ -1,0 +1,115 @@
+{
+  "anti_cheating": {
+    "audit_passed": true,
+    "date_ambiguous_games_removed": [
+      "195403081MLH",
+      "197002081CHI",
+      "197903231PHI",
+      "198304131SAS"
+    ],
+    "duplicate_prompt_games_removed": 167,
+    "eligible_games": 59004,
+    "evaluation_warning": "Historical outcome scores cannot rule out pretraining contamination. Only a frozen prospective ledger can support a real forecasting claim.",
+    "model_does_not_see": [
+      "absolute date",
+      "data source",
+      "game identity",
+      "realized outcome",
+      "team identity",
+      "teacher target during evaluation"
+    ],
+    "model_sees": [
+      "anonymous question",
+      "neutral Elo prior",
+      "venue"
+    ],
+    "selected_perspective_venues": {
+      "away": 29393,
+      "home": 29425,
+      "neutral": 19
+    },
+    "source_games": 59008,
+    "unique_prompt_games": 58837
+  },
+  "built_at": "2026-07-11T18:57:02.918086+00:00",
+  "five_thirty_eight_baseline": {
+    "test": {
+      "accuracy": 0.6635204081632653,
+      "count": 3920,
+      "expected_calibration_error": 0.024912934821428565,
+      "mean_brier": 0.2080347184829067,
+      "mean_log_loss": 0.6021897643902464
+    },
+    "train": {
+      "accuracy": 0.6825012685897186,
+      "count": 51238,
+      "expected_calibration_error": 0.006772546900737753,
+      "mean_brier": 0.20316005446234142,
+      "mean_log_loss": 0.5916336138619799
+    },
+    "validation": {
+      "accuracy": 0.6822506115792335,
+      "count": 3679,
+      "expected_calibration_error": 0.01649048586572438,
+      "mean_brier": 0.20377300284926284,
+      "mean_log_loss": 0.5934629733360488
+    }
+  },
+  "model_input_schema_version": 2,
+  "outputs": {
+    "nba_elo_test_answers.jsonl": "6fb32dff71b2133eea66931afc8ad738ae34a5635a1837c2f2b910339c90aa64",
+    "nba_elo_test_prompts.jsonl": "0d210efd685f7785e9e749f7166ad7ce1a5bfa97668c0fcd4a0c5f5935c72760",
+    "nba_elo_train.jsonl": "b4d4e079773e859b86070e64054cc011a5d96d5adbb74a5431a51b5fecd913ec",
+    "nba_elo_train_sft.jsonl": "d7cbc3a1a5baaeed37161e859e52caa060aef647d1218f5bbaee737d136eee6f",
+    "nba_elo_validation_answers.jsonl": "2f91173d30ed835d02663761dcf83c23347a6f9cdb2c0305ac719b852b1c460f",
+    "nba_elo_validation_prompts.jsonl": "a1c018c09107039101ee9426331f4bbd80bc704ffe23c2d72c628995c245b3cb"
+  },
+  "source": {
+    "game_information_credit": "Basketball-Reference.com",
+    "license": "CC BY 4.0",
+    "license_url": "https://github.com/fivethirtyeight/data/blob/master/LICENSE",
+    "name": "FiveThirtyEight historical NBA Elo",
+    "page": "https://github.com/fivethirtyeight/data/tree/master/nba-elo",
+    "sha256": "d46ed3540ee8d9eca31b3e94cc8c777e0be5156173d814ebf65b8195e8d616bc",
+    "url": "https://raw.githubusercontent.com/fivethirtyeight/data/6d880e939ad3d11d94c137c911681b3cf718fd74/nba-elo/nbaallelo.csv"
+  },
+  "splits": {
+    "test": {
+      "first_season": 2013,
+      "rows": 3920
+    },
+    "train": {
+      "rows": 51238,
+      "through_season": 2009
+    },
+    "validation": {
+      "first_season": 2010,
+      "rows": 3679,
+      "through_season": 2012
+    }
+  },
+  "transformation": {
+    "elo_oracle": {
+      "all_eligible_rows_passed": true,
+      "home_advantage_points": 100.0,
+      "maximum_allowed_target_error": 1e-06
+    },
+    "filters": [
+      "lg_id == NBA",
+      "one deterministic hash-selected perspective per game",
+      "one row per unique model-facing prompt across all splits"
+    ],
+    "postgame_fields_excluded_from_prompts": [
+      "elo_n",
+      "game_result",
+      "opp_elo_n",
+      "opp_pts",
+      "pts",
+      "win_equiv"
+    ],
+    "prior": "Neutral-court probability computed from pregame Elo ratings",
+    "target": "FiveThirtyEight retrospective pregame Elo forecast",
+    "task_warning": "The target is a deterministic venue adjustment of the Elo prior. This is formula distillation, not a broad forecasting benchmark.",
+    "timestamp_note": "Source dates are represented as 00:00 UTC date-granularity proxies; they are not publication or tipoff timestamps."
+  }
+}

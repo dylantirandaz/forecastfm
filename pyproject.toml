@@ -1,0 +1,97 @@
+[project]
+name = "forecastfm"
+version = "0.1.0"
+description = "A small, typed foundation for probabilistic forecasting models"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[project.optional-dependencies]
+tinker = [
+    "tinker==0.22.7",
+    "tinker-cookbook==0.4.3",
+]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.403",
+    "pytest>=8.4.0",
+    "ruff>=0.12.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/forecastfm"]
+
+[tool.pyright]
+typeCheckingMode = "strict"
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+include = ["src", "tests", "examples"]
+exclude = [".venv"]
+reportUnnecessaryTypeIgnoreComment = "error"
+reportUnnecessaryCast = "error"
+reportImplicitOverride = "error"
+
+[tool.pytest.ini_options]
+addopts = "-q -ra --strict-config --strict-markers"
+testpaths = ["tests"]
+xfail_strict = true
+markers = [
+    "integration: requires network access and credentials",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
+target-version = "py312"
+
+[tool.ruff.format]
+docstring-code-format = true
+quote-style = "double"
+
+[tool.ruff.lint]
+select = [
+    "ANN",  # Require type annotations.
+    "A",    # Do not shadow Python builtins.
+    "B",    # Catch common bugs.
+    "C4",   # Prefer clear comprehensions.
+    "C90",  # Limit cyclomatic complexity.
+    "D",    # Require public documentation.
+    "DTZ",  # Require timezone-aware datetimes.
+    "E",    # Enforce pycodestyle errors.
+    "F",    # Catch undefined and unused names.
+    "I",    # Sort imports.
+    "N",    # Enforce conventional names.
+    "PERF", # Catch avoidable performance traps.
+    "PIE",  # Catch unnecessary code.
+    "PL",   # Apply useful Pylint checks.
+    "PT",   # Keep pytest usage explicit.
+    "PTH",  # Prefer pathlib.
+    "RUF",  # Apply Ruff-specific checks.
+    "SIM",  # Prefer simple control flow.
+    "UP",   # Use modern Python syntax.
+]
+ignore = [
+    "D105",   # Magic methods are self-documenting here.
+    "D203",   # Incompatible with D211.
+    "D213",   # Incompatible with D212.
+    "PLR2004", # Named numeric constants can reduce local readability.
+    "SIM108", # A ternary is not always easier to read.
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-branches = 8
+max-returns = 5
+max-statements = 40
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["D"]
