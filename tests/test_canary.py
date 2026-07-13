@@ -13,6 +13,7 @@ from forecastfm.canary import (
     INVALID_LOG_LOSS,
     INVALID_MAE,
     PROMPT_COUNT,
+    V2_PROTOCOL,
     CanaryManifest,
     CanaryModels,
     CanaryPrompt,
@@ -21,6 +22,7 @@ from forecastfm.canary import (
     CompletedGeneration,
     GenerationRecord,
     ModelRole,
+    RendererFailedGeneration,
     SealedGenerations,
     build_canary_artifacts,
     failed_generation,
@@ -28,6 +30,7 @@ from forecastfm.canary import (
     load_generation_records,
     load_sealed_generations,
     parsed_team_probability,
+    renderer_failed_generation,
     score_primary,
     seal_generation_outputs,
     successful_generation,
@@ -254,6 +257,110 @@ def test_builder_selects_lexical_ids_and_creates_deterministic_swaps(tmp_path: P
 
     with pytest.raises(CanaryValidationError, match="replace"):
         _build(tmp_path, include_answers=False)
+
+
+def test_v2_builder_selects_disjoint_second_slice_and_binds_commitments(
+    tmp_path: Path,
+) -> None:
+    examples = tuple(_example(index) for index in range(140))
+    source_path = tmp_path / "data" / "nba_elo_validation_prompts.jsonl"
+    _write_source(source_path, examples)
+    ordered_ids = tuple(sorted(item.case.question.question_id for item in examples))
+    commitments = {
+        "retired_v1_manifest_sha256": "1" * 64,
+        "retired_v1_question_ids_sha256": canonical_sha256(list(ordered_ids[:CANARY_SIZE])),
+        "format_smoke_result_sha256": "2" * 64,
+        "format_smoke_seal_sha256": "3" * 64,
+    }
+    source = CanarySource(
+        validation_prompts_path=source_path,
+        validation_prompts_sha256=file_sha256(source_path),
+        validation_answers_sha256="a" * 64,
+        dataset_manifest_sha256="b" * 64,
+        expected_question_ids_sha256=canonical_sha256(
+            list(ordered_ids[CANARY_SIZE : CANARY_SIZE * 2])
+        ),
+    )
+    models = CanaryModels(
+        training_lock_sha256="c" * 64,
+        experiment_sha256="d" * 64,
+        base_model="Qwen/Qwen3.5-4B",
+        adapter_sampler_path="tinker://adapter/final",
+        decoding={
+            "renderer": "qwen3_5_disable_thinking",
+            "transport_retry_note": "SDK transport retries are not user-controllable.",
+        },
+        protocol_code_revision="e" * 40,
+        protocol_commitments=commitments,
+    )
+    output = tmp_path / "evaluation" / "validation_canary_v2"
+    prompts_path = output / "prompts.jsonl"
+    manifest_path = output / "manifest.json"
+
+    manifest = build_canary_artifacts(
+        source,
+        models,
+        prompts_path,
+        manifest_path,
+        V2_PROTOCOL,
+    )
+    loaded, prompts = load_canary(manifest_path, prompts_path)
+    serialized = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert loaded == manifest
+    assert manifest.question_ids == ordered_ids[CANARY_SIZE : CANARY_SIZE * 2]
+    assert set(manifest.question_ids).isdisjoint(ordered_ids[:CANARY_SIZE])
+    assert len(prompts) == PROMPT_COUNT
+    assert serialized["selection"]["algorithm"] == V2_PROTOCOL.selection_algorithm
+    assert serialized["prompts"]["path"] == V2_PROTOCOL.frozen_prompts_label
+    assert serialized["protocol_commitments"] == commitments
+
+    serialized["decoding"]["renderer"] = "qwen3_5"
+    manifest_path.write_text(json.dumps(serialized) + "\n", encoding="utf-8")
+    with pytest.raises(CanaryValidationError, match="no-thinking renderer"):
+        load_canary(manifest_path, prompts_path)
+
+
+def test_v2_generation_namespace_and_renderer_failure_trace_are_preserved(
+    tmp_path: Path,
+) -> None:
+    built = _build(tmp_path)
+    prompt = built.prompts[0]
+    failure = renderer_failed_generation(
+        prompt,
+        "adapter",
+        RendererFailedGeneration(
+            prompt_tokens=(1, 2),
+            response_tokens=(3, 4),
+            raw_response="raw trace",
+            parsed_response="",
+            termination=None,
+            stop_reason="stop",
+            error="renderer_exception:ValueError",
+        ),
+        V2_PROTOCOL.attempt_namespace,
+    )
+    output = tmp_path / "renderer_error.jsonl"
+
+    write_generation_records(
+        output,
+        (failure,),
+        (prompt,),
+        "adapter",
+        V2_PROTOCOL.attempt_namespace,
+    )
+    loaded = load_generation_records(
+        output,
+        (prompt,),
+        "adapter",
+        V2_PROTOCOL.attempt_namespace,
+    )
+
+    assert loaded == (failure,)
+    assert failure.attempt_id.startswith("validation-canary-v2:adapter:")
+    assert failure.response_tokens == (3, 4)
+    assert failure.raw_response == "raw trace"
+    assert parsed_team_probability(failure) is None
 
 
 def test_builder_rejects_wrong_digest_target_fields_and_test_path(tmp_path: Path) -> None:

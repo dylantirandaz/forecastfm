@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import log
 from pathlib import Path
 from typing import Literal
@@ -42,7 +42,7 @@ OUTCOMES = ("team_wins", "opponent_wins")
 
 type Variant = Literal["original", "side_swap"]
 type ModelRole = Literal["base", "adapter"]
-type GenerationStatus = Literal["completed", "error"]
+type GenerationStatus = Literal["completed", "error", "renderer_error"]
 
 VARIANTS: tuple[Variant, ...] = ("original", "side_swap")
 MODEL_ROLES: tuple[ModelRole, ...] = ("base", "adapter")
@@ -80,6 +80,44 @@ class CanaryValidationError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class CanaryProtocol:
+    """Version-specific selection, artifact, and attempt identifiers."""
+
+    selection_start: int
+    selection_algorithm: str
+    frozen_prompts_label: str
+    attempt_namespace: str
+    renderer_name: str
+
+
+V1_PROTOCOL = CanaryProtocol(
+    selection_start=0,
+    selection_algorithm=SELECTION_ALGORITHM,
+    frozen_prompts_label=FROZEN_PROMPTS_LABEL,
+    attempt_namespace="validation-canary-v1",
+    renderer_name="qwen3_5",
+)
+V2_PROTOCOL = CanaryProtocol(
+    selection_start=CANARY_SIZE,
+    selection_algorithm="lexicographic_question_id_65_through_128_v2",
+    frozen_prompts_label="evaluation/validation_canary_v2/prompts.jsonl",
+    attempt_namespace="validation-canary-v2",
+    renderer_name="qwen3_5_disable_thinking",
+)
+CANARY_PROTOCOLS = (V1_PROTOCOL, V2_PROTOCOL)
+V2_PROTOCOL_COMMITMENT_KEYS = {
+    "retired_v1_manifest_sha256",
+    "retired_v1_question_ids_sha256",
+    "format_smoke_result_sha256",
+    "format_smoke_seal_sha256",
+}
+
+
+def _empty_protocol_commitments() -> dict[str, str]:
+    return {}
+
+
+@dataclass(frozen=True, slots=True)
 class CanarySource:
     """Verified source commitments used without opening the answer file."""
 
@@ -100,6 +138,7 @@ class CanaryModels:
     adapter_sampler_path: str
     decoding: Mapping[str, object]
     protocol_code_revision: str
+    protocol_commitments: Mapping[str, str] = field(default_factory=_empty_protocol_commitments)
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +168,7 @@ class CanaryManifest:
     question_ids: tuple[str, ...]
     question_ids_sha256: str
     prompts_sha256: str
+    protocol_commitments: dict[str, str] = field(default_factory=_empty_protocol_commitments)
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +201,19 @@ class CompletedGeneration:
     parsed_response: str
     termination: str
     stop_reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class RendererFailedGeneration:
+    """Provider trace retained when local rendering or tool validation fails."""
+
+    prompt_tokens: tuple[int, ...]
+    response_tokens: tuple[int, ...]
+    raw_response: str
+    parsed_response: str
+    termination: str | None
+    stop_reason: str
+    error: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,20 +270,26 @@ def build_canary_artifacts(
     models: CanaryModels,
     prompts_path: Path,
     manifest_path: Path,
+    protocol: CanaryProtocol = V1_PROTOCOL,
 ) -> CanaryManifest:
     """Select prompts without answers and exclusively create both frozen artifacts."""
+    if protocol not in CANARY_PROTOCOLS:
+        raise CanaryValidationError("unsupported canary protocol")
     _require_new_paths((prompts_path, manifest_path))
     source_records = _load_source_prompts(source)
-    selected = tuple(sorted(source_records, key=lambda item: item.question_id)[:CANARY_SIZE])
+    ordered = sorted(source_records, key=lambda item: item.question_id)
+    selection_end = protocol.selection_start + CANARY_SIZE
+    selected = tuple(ordered[protocol.selection_start : selection_end])
     if len(selected) != CANARY_SIZE:
         raise CanaryValidationError(
-            f"validation source must contain at least {CANARY_SIZE} prompts"
+            f"validation source must contain at least {selection_end} prompts"
         )
     prompts = _paired_prompts(selected)
     prompts_text = _jsonl_text(_prompt_to_dict(prompt) for prompt in prompts)
     manifest = _manifest(source, models, selected, text_sha256(prompts_text))
+    _validate_manifest_values(manifest, protocol)
     _write_new_text(prompts_path, prompts_text)
-    _write_new_text(manifest_path, _manifest_text(manifest))
+    _write_new_text(manifest_path, _manifest_text(manifest, protocol))
     return manifest
 
 
@@ -239,18 +298,29 @@ def load_canary(
     prompts_path: Path,
 ) -> tuple[CanaryManifest, tuple[CanaryPrompt, ...]]:
     """Load a manifest and its exact, complete target-free prompt artifact."""
-    manifest = _manifest_from_dict(parse_json_object(manifest_path.read_text(encoding="utf-8")))
+    manifest, prompts, _protocol = _load_canary_protocol(manifest_path, prompts_path)
+    return manifest, prompts
+
+
+def _load_canary_protocol(
+    manifest_path: Path,
+    prompts_path: Path,
+) -> tuple[CanaryManifest, tuple[CanaryPrompt, ...], CanaryProtocol]:
+    manifest, protocol = _manifest_from_dict(
+        parse_json_object(manifest_path.read_text(encoding="utf-8"))
+    )
     if file_sha256(prompts_path) != manifest.prompts_sha256:
         raise CanaryValidationError("frozen prompts differ from the canary manifest")
     prompts = tuple(_prompt_from_dict(item) for item in _load_jsonl_objects(prompts_path))
     _validate_frozen_prompts(prompts, manifest.question_ids)
-    return manifest, prompts
+    return manifest, prompts, protocol
 
 
 def successful_generation(
     prompt: CanaryPrompt,
     model_role: ModelRole,
     completed: CompletedGeneration,
+    attempt_namespace: str = V1_PROTOCOL.attempt_namespace,
 ) -> GenerationRecord:
     """Create one completed generation row without repairing its response."""
     if not completed.termination.strip() or not completed.stop_reason.strip():
@@ -261,7 +331,7 @@ def successful_generation(
         question_id=prompt.question_id,
         variant=prompt.variant,
         prompt_sha256=prompt.prompt_sha256,
-        attempt_id=_attempt_id(model_role, prompt.sequence),
+        attempt_id=_attempt_id(attempt_namespace, model_role, prompt.sequence),
         prompt_tokens=_token_tuple(completed.prompt_tokens, "prompt_tokens", require_nonempty=True),
         response_tokens=_token_tuple(completed.response_tokens, "response_tokens"),
         raw_response=completed.raw_response,
@@ -278,6 +348,7 @@ def failed_generation(
     model_role: ModelRole,
     prompt_tokens: Sequence[int],
     error: str,
+    attempt_namespace: str = V1_PROTOCOL.attempt_namespace,
 ) -> GenerationRecord:
     """Create the sole immutable error row for a failed provider attempt."""
     if not error.strip():
@@ -288,7 +359,7 @@ def failed_generation(
         question_id=prompt.question_id,
         variant=prompt.variant,
         prompt_sha256=prompt.prompt_sha256,
-        attempt_id=_attempt_id(model_role, prompt.sequence),
+        attempt_id=_attempt_id(attempt_namespace, model_role, prompt.sequence),
         prompt_tokens=_token_tuple(prompt_tokens, "prompt_tokens", require_nonempty=True),
         response_tokens=(),
         raw_response="",
@@ -300,14 +371,42 @@ def failed_generation(
     )
 
 
+def renderer_failed_generation(
+    prompt: CanaryPrompt,
+    model_role: ModelRole,
+    failed: RendererFailedGeneration,
+    attempt_namespace: str = V1_PROTOCOL.attempt_namespace,
+) -> GenerationRecord:
+    """Create an invalid row while preserving the paid provider response."""
+    if not failed.stop_reason.strip() or not failed.error.strip():
+        raise CanaryValidationError("renderer failure reason and provider stop must not be empty")
+    return GenerationRecord(
+        sequence=prompt.sequence,
+        model_role=_model_role(model_role),
+        question_id=prompt.question_id,
+        variant=prompt.variant,
+        prompt_sha256=prompt.prompt_sha256,
+        attempt_id=_attempt_id(attempt_namespace, model_role, prompt.sequence),
+        prompt_tokens=_token_tuple(failed.prompt_tokens, "prompt_tokens", require_nonempty=True),
+        response_tokens=_token_tuple(failed.response_tokens, "response_tokens"),
+        raw_response=failed.raw_response,
+        parsed_response=failed.parsed_response,
+        status="renderer_error",
+        termination=failed.termination,
+        stop_reason=failed.stop_reason,
+        error=failed.error,
+    )
+
+
 def write_generation_records(
     path: Path,
     records: Sequence[GenerationRecord],
     prompts: Sequence[CanaryPrompt],
     model_role: ModelRole,
+    attempt_namespace: str = V1_PROTOCOL.attempt_namespace,
 ) -> str:
     """Exclusively write one exact ordered generation row per prompt."""
-    _validate_generation_coverage(records, prompts, model_role)
+    _validate_generation_coverage(records, prompts, model_role, attempt_namespace)
     text = _jsonl_text(_generation_to_dict(record) for record in records)
     _write_new_text(path, text)
     return text_sha256(text)
@@ -332,10 +431,11 @@ def load_generation_records(
     path: Path,
     prompts: Sequence[CanaryPrompt],
     model_role: ModelRole,
+    attempt_namespace: str = V1_PROTOCOL.attempt_namespace,
 ) -> tuple[GenerationRecord, ...]:
     """Load a generation file only when it exactly covers the frozen prompt order."""
     records = tuple(_generation_from_dict(item) for item in _load_jsonl_objects(path))
-    _validate_generation_coverage(records, prompts, model_role)
+    _validate_generation_coverage(records, prompts, model_role, attempt_namespace)
     return records
 
 
@@ -347,9 +447,14 @@ def seal_generation_outputs(
     adapter_path: Path,
 ) -> GenerationSeal:
     """Validate complete paired outputs and exclusively create their hash seal."""
-    _, prompts = load_canary(manifest_path, prompts_path)
-    base = load_generation_records(base_path, prompts, "base")
-    adapter = load_generation_records(adapter_path, prompts, "adapter")
+    _, prompts, protocol = _load_canary_protocol(manifest_path, prompts_path)
+    base = load_generation_records(base_path, prompts, "base", protocol.attempt_namespace)
+    adapter = load_generation_records(
+        adapter_path,
+        prompts,
+        "adapter",
+        protocol.attempt_namespace,
+    )
     _validate_paired_prompt_tokens(base, adapter)
     attempt_path = base_path.parent / ATTEMPT_FILENAME
     _validate_attempt_marker(attempt_path, manifest_path, prompts_path)
@@ -374,9 +479,14 @@ def load_sealed_generations(
     """Verify a seal and return the two complete immutable generation files."""
     seal = _seal_from_dict(parse_json_object(seal_path.read_text(encoding="utf-8")))
     _verify_seal(seal, manifest_path, prompts_path, base_path, adapter_path)
-    manifest, prompts = load_canary(manifest_path, prompts_path)
-    base = load_generation_records(base_path, prompts, "base")
-    adapter = load_generation_records(adapter_path, prompts, "adapter")
+    manifest, prompts, protocol = _load_canary_protocol(manifest_path, prompts_path)
+    base = load_generation_records(base_path, prompts, "base", protocol.attempt_namespace)
+    adapter = load_generation_records(
+        adapter_path,
+        prompts,
+        "adapter",
+        protocol.attempt_namespace,
+    )
     _validate_paired_prompt_tokens(base, adapter)
     return SealedGenerations(
         manifest=manifest,
@@ -548,11 +658,15 @@ def _manifest(
         question_ids=question_ids,
         question_ids_sha256=question_ids_sha256,
         prompts_sha256=prompts_sha256,
+        protocol_commitments=dict(models.protocol_commitments),
     )
 
 
-def _manifest_to_dict(manifest: CanaryManifest) -> dict[str, object]:
-    return {
+def _manifest_to_dict(
+    manifest: CanaryManifest,
+    protocol: CanaryProtocol = V1_PROTOCOL,
+) -> dict[str, object]:
+    value: dict[str, object] = {
         "schema_version": CANARY_SCHEMA_VERSION,
         "kind": "forecastfm_validation_canary",
         "status": "frozen_before_generation",
@@ -564,13 +678,13 @@ def _manifest_to_dict(manifest: CanaryManifest) -> dict[str, object]:
             "answers_opened_during_selection": False,
         },
         "selection": {
-            "algorithm": SELECTION_ALGORITHM,
+            "algorithm": protocol.selection_algorithm,
             "game_count": CANARY_SIZE,
             "ordered_question_ids": list(manifest.question_ids),
             "ordered_question_ids_sha256": manifest.question_ids_sha256,
         },
         "prompts": {
-            "path": FROZEN_PROMPTS_LABEL,
+            "path": protocol.frozen_prompts_label,
             "count": PROMPT_COUNT,
             "sha256": manifest.prompts_sha256,
             "ordering": "original then side_swap for each ordered question_id",
@@ -592,9 +706,14 @@ def _manifest_to_dict(manifest: CanaryManifest) -> dict[str, object]:
             "historical_answers_require_sealed_outputs": True,
         },
     }
+    if manifest.protocol_commitments:
+        value["protocol_commitments"] = manifest.protocol_commitments
+    return value
 
 
-def _manifest_from_dict(record: Mapping[str, object]) -> CanaryManifest:
+def _manifest_from_dict(
+    record: Mapping[str, object],
+) -> tuple[CanaryManifest, CanaryProtocol]:
     keys = {
         "schema_version",
         "kind",
@@ -606,6 +725,8 @@ def _manifest_from_dict(record: Mapping[str, object]) -> CanaryManifest:
         "decoding",
         "scoring",
     }
+    if "protocol_commitments" in record:
+        keys.add("protocol_commitments")
     require_exact_keys(record, keys, "canary manifest")
     _require_manifest_header(record)
     source = require_object(required_field(record, "source"), "source")
@@ -613,7 +734,7 @@ def _manifest_from_dict(record: Mapping[str, object]) -> CanaryManifest:
     prompts = require_object(required_field(record, "prompts"), "prompts")
     models = require_object(required_field(record, "models"), "models")
     scoring = require_object(required_field(record, "scoring"), "scoring")
-    _validate_manifest_sections(source, selection, prompts)
+    protocol = _validate_manifest_sections(source, selection, prompts)
     _validate_model_and_scoring_sections(models, scoring)
     question_ids = _strings(required_field(selection, "ordered_question_ids"), "question_ids")
     manifest = CanaryManifest(
@@ -629,9 +750,10 @@ def _manifest_from_dict(record: Mapping[str, object]) -> CanaryManifest:
         question_ids=question_ids,
         question_ids_sha256=_string(selection, "ordered_question_ids_sha256"),
         prompts_sha256=_string(prompts, "sha256"),
+        protocol_commitments=_protocol_commitments(record, protocol),
     )
-    _validate_manifest_values(manifest)
-    return manifest
+    _validate_manifest_values(manifest, protocol)
+    return manifest, protocol
 
 
 def _require_manifest_header(record: Mapping[str, object]) -> None:
@@ -647,7 +769,7 @@ def _validate_manifest_sections(
     source: Mapping[str, object],
     selection: Mapping[str, object],
     prompts: Mapping[str, object],
-) -> None:
+) -> CanaryProtocol:
     require_exact_keys(
         source,
         {
@@ -670,8 +792,10 @@ def _validate_manifest_sections(
         "prompts",
     )
     _validate_source_section(source)
-    _validate_selection_section(selection)
-    _validate_prompt_section(prompts)
+    protocol = _protocol_from_sections(selection, prompts)
+    _validate_selection_section(selection, protocol)
+    _validate_prompt_section(prompts, protocol)
+    return protocol
 
 
 def _validate_source_section(source: Mapping[str, object]) -> None:
@@ -681,15 +805,21 @@ def _validate_source_section(source: Mapping[str, object]) -> None:
         raise CanaryValidationError("canary selection must be answer-free")
 
 
-def _validate_selection_section(selection: Mapping[str, object]) -> None:
-    if _string(selection, "algorithm") != SELECTION_ALGORITHM:
+def _validate_selection_section(
+    selection: Mapping[str, object],
+    protocol: CanaryProtocol,
+) -> None:
+    if _string(selection, "algorithm") != protocol.selection_algorithm:
         raise CanaryValidationError("unknown canary selection algorithm")
     if required_field(selection, "game_count") != CANARY_SIZE:
         raise CanaryValidationError("canary game count differs from the frozen count")
 
 
-def _validate_prompt_section(prompts: Mapping[str, object]) -> None:
-    if _string(prompts, "path") != FROZEN_PROMPTS_LABEL:
+def _validate_prompt_section(
+    prompts: Mapping[str, object],
+    protocol: CanaryProtocol,
+) -> None:
+    if _string(prompts, "path") != protocol.frozen_prompts_label:
         raise CanaryValidationError("manifest has an unexpected frozen prompt path")
     if required_field(prompts, "count") != PROMPT_COUNT:
         raise CanaryValidationError("canary prompt count differs from the frozen count")
@@ -697,6 +827,17 @@ def _validate_prompt_section(prompts: Mapping[str, object]) -> None:
         raise CanaryValidationError("unknown side-swap transformation")
     if _string(prompts, "ordering") != "original then side_swap for each ordered question_id":
         raise CanaryValidationError("unknown canary prompt ordering")
+
+
+def _protocol_from_sections(
+    selection: Mapping[str, object],
+    prompts: Mapping[str, object],
+) -> CanaryProtocol:
+    identity = (_string(selection, "algorithm"), _string(prompts, "path"))
+    for protocol in CANARY_PROTOCOLS:
+        if identity == (protocol.selection_algorithm, protocol.frozen_prompts_label):
+            return protocol
+    raise CanaryValidationError("unknown canary protocol")
 
 
 def _validate_model_and_scoring_sections(
@@ -746,7 +887,10 @@ def _validate_model_and_scoring_sections(
         raise CanaryValidationError("manifest scoring policy differs from the frozen policy")
 
 
-def _validate_manifest_values(manifest: CanaryManifest) -> None:
+def _validate_manifest_values(
+    manifest: CanaryManifest,
+    protocol: CanaryProtocol,
+) -> None:
     hashes = (
         manifest.source_prompt_sha256,
         manifest.source_answer_sha256,
@@ -768,6 +912,45 @@ def _validate_manifest_values(manifest: CanaryManifest) -> None:
         raise CanaryValidationError("manifest model identities are incomplete")
     if not _is_git_revision(manifest.protocol_code_revision):
         raise CanaryValidationError("manifest protocol code revision is invalid")
+    _validate_v2_decoding(manifest, protocol)
+    _validate_protocol_commitments(manifest, protocol)
+
+
+def _validate_v2_decoding(manifest: CanaryManifest, protocol: CanaryProtocol) -> None:
+    if protocol != V2_PROTOCOL:
+        return
+    if manifest.decoding.get("renderer") != protocol.renderer_name:
+        raise CanaryValidationError("v2 manifest does not lock the no-thinking renderer")
+    retry_note = manifest.decoding.get("transport_retry_note")
+    if not isinstance(retry_note, str) or not retry_note.strip():
+        raise CanaryValidationError("v2 manifest does not disclose SDK transport retries")
+
+
+def _validate_protocol_commitments(
+    manifest: CanaryManifest,
+    protocol: CanaryProtocol,
+) -> None:
+    commitment_keys = set(manifest.protocol_commitments)
+    if protocol == V1_PROTOCOL and commitment_keys:
+        raise CanaryValidationError("v1 manifest must not contain v2 commitments")
+    if protocol == V2_PROTOCOL and commitment_keys != V2_PROTOCOL_COMMITMENT_KEYS:
+        raise CanaryValidationError("v2 manifest commitments are incomplete")
+    if any(not _is_hash(value) for value in manifest.protocol_commitments.values()):
+        raise CanaryValidationError("manifest protocol commitment is not a SHA-256 digest")
+
+
+def _protocol_commitments(
+    record: Mapping[str, object],
+    protocol: CanaryProtocol,
+) -> dict[str, str]:
+    if "protocol_commitments" not in record:
+        if protocol == V2_PROTOCOL:
+            raise CanaryValidationError("v2 manifest is missing protocol commitments")
+        return {}
+    values = require_object(record["protocol_commitments"], "protocol_commitments")
+    return {
+        key: require_string(value, f"protocol_commitments.{key}") for key, value in values.items()
+    }
 
 
 def _validate_frozen_prompts(
@@ -866,6 +1049,7 @@ def _validate_generation_coverage(
     records: Sequence[GenerationRecord],
     prompts: Sequence[CanaryPrompt],
     model_role: ModelRole,
+    attempt_namespace: str,
 ) -> None:
     if len(records) != len(prompts):
         raise CanaryValidationError("generation file must contain one row per frozen prompt")
@@ -877,7 +1061,7 @@ def _validate_generation_coverage(
             prompt.question_id,
             prompt.variant,
             prompt.prompt_sha256,
-            _attempt_id(model_role, prompt.sequence),
+            _attempt_id(attempt_namespace, model_role, prompt.sequence),
         )
         actual = (
             record.sequence,
@@ -905,7 +1089,7 @@ def _validate_generation_shape(record: GenerationRecord) -> None:
             or not record.stop_reason.strip()
         ):
             raise CanaryValidationError("completed generation fields are inconsistent")
-    elif any(
+    elif record.status == "error" and any(
         (
             record.response_tokens,
             record.raw_response,
@@ -916,6 +1100,13 @@ def _validate_generation_shape(record: GenerationRecord) -> None:
         )
     ):
         raise CanaryValidationError("error generation fields are inconsistent")
+    elif record.status == "renderer_error" and (
+        record.stop_reason is None
+        or not record.stop_reason.strip()
+        or record.error is None
+        or not record.error.strip()
+    ):
+        raise CanaryValidationError("renderer-error generation fields are inconsistent")
 
 
 def _validate_paired_prompt_tokens(
@@ -975,7 +1166,7 @@ def _primary_model_metrics(
 def parsed_team_probability(record: GenerationRecord) -> float | None:
     """Return the strict parsed team probability, or ``None`` without repair."""
     if (
-        record.status == "error"
+        record.status != "completed"
         or record.termination != "stop_sequence"
         or record.stop_reason != "stop"
     ):
@@ -1099,8 +1290,8 @@ def _validate_attempt_marker(
         raise CanaryValidationError("attempt marker differs from the frozen canary")
 
 
-def _manifest_text(manifest: CanaryManifest) -> str:
-    return json.dumps(_manifest_to_dict(manifest), indent=2, sort_keys=True) + "\n"
+def _manifest_text(manifest: CanaryManifest, protocol: CanaryProtocol) -> str:
+    return json.dumps(_manifest_to_dict(manifest, protocol), indent=2, sort_keys=True) + "\n"
 
 
 def _load_jsonl_objects(path: Path) -> tuple[dict[str, object], ...]:
@@ -1140,8 +1331,10 @@ def _require_new_paths(paths: Sequence[Path]) -> None:
         raise CanaryValidationError(f"refusing to replace frozen artifacts: {', '.join(existing)}")
 
 
-def _attempt_id(model_role: ModelRole, sequence: int) -> str:
-    return f"validation-canary-v1:{model_role}:{sequence:03d}"
+def _attempt_id(attempt_namespace: str, model_role: ModelRole, sequence: int) -> str:
+    if not attempt_namespace.strip():
+        raise CanaryValidationError("attempt namespace must not be empty")
+    return f"{attempt_namespace}:{model_role}:{sequence:03d}"
 
 
 def _token_tuple(
@@ -1188,6 +1381,8 @@ def _generation_status(value: str) -> GenerationStatus:
         return "completed"
     if value == "error":
         return "error"
+    if value == "renderer_error":
+        return "renderer_error"
     raise CanaryValidationError(f"unknown generation status: {value}")
 
 
