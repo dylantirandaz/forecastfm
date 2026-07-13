@@ -1,0 +1,10 @@
+{
+  "adapter_sha256": "92d10386d86e5751a1d90629aad195845af4eca60ce7d2675cd2b0fac30a9b08",
+  "attempt_sha256": "878534f2279a85e78501f307446ef0a548c20afaa416c0f934c0fa9c1b449dce",
+  "base_sha256": "03b725532f4f4e3e69e75c9974336be1781b1d59ac1835d1128f586cddd78928",
+  "kind": "forecastfm_canary_generation_seal",
+  "manifest_sha256": "bb5396100c6867f4cca2ddbfffc600aef7109baeb8660055b3bc366a02d1c1f1",
+  "prompts_sha256": "f517a9e20412d35c825245b02f917bcdd6813d23f347c325633ff050893af95e",
+  "schema_version": 1,
+  "status": "sealed_before_scoring"
+}
