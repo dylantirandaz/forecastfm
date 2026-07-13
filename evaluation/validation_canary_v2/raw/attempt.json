@@ -1,0 +1,7 @@
+{
+  "kind": "forecastfm_canary_attempt",
+  "manifest_sha256": "a4e25639d59c0dd30dd73d625f1ba3ce2865404a2f75e642215e1a3b567a6a70",
+  "prompts_sha256": "3815edd18b060b393aa08092845b1012d5051259b3786843b8ccb30933fd0f7d",
+  "schema_version": 1,
+  "status": "started_before_remote_client"
+}
