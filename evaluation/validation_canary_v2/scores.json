@@ -1,0 +1,75 @@
+{
+  "commitments": {
+    "canary_manifest_sha256": "a4e25639d59c0dd30dd73d625f1ba3ce2865404a2f75e642215e1a3b567a6a70",
+    "generation_seal_sha256": "ada830dd30110b9e2b4d67c7439a55089f1ab80f78a3402f1b07cc9377820421"
+  },
+  "execution": {
+    "logical_sdk_call_count": 256,
+    "transport_request_count_observable": false,
+    "transport_retry_note": "Tinker 0.22.7 may retransmit one logical request with the same session and sequence ID."
+  },
+  "kind": "forecastfm_validation_canary_v2_scores",
+  "primary_answer_free": {
+    "adapter": {
+      "game_count": 64,
+      "oracle_mae": 0.0906615172442191,
+      "schema_valid_rate": 1.0,
+      "side_swap_mae": 0.16169021015625,
+      "side_swap_valid_rate": 1.0,
+      "valid_only_oracle_mae": 0.0906615172442191,
+      "valid_only_side_swap_mae": 0.16169021015625,
+      "valid_original_count": 64,
+      "valid_pair_count": 64,
+      "valid_pair_rate": 1.0,
+      "valid_side_swap_count": 64
+    },
+    "adapter_minus_base_oracle_mae": -0.02362088846641873,
+    "adapter_minus_base_side_swap_mae": 0.13307488984375002,
+    "base": {
+      "game_count": 64,
+      "oracle_mae": 0.11428240571063783,
+      "schema_valid_rate": 1.0,
+      "side_swap_mae": 0.028615320312499998,
+      "side_swap_valid_rate": 1.0,
+      "valid_only_oracle_mae": 0.11428240571063783,
+      "valid_only_side_swap_mae": 0.028615320312499998,
+      "valid_original_count": 64,
+      "valid_pair_count": 64,
+      "valid_pair_rate": 1.0,
+      "valid_side_swap_count": 64
+    }
+  },
+  "publication": {
+    "commit": "b1c982352bd53a05f7422646588abe47b1c7f3f9",
+    "remote": "origin",
+    "remote_ref": "refs/heads/main",
+    "remote_url": "https://github.com/dylantirandaz/forecastfm.git"
+  },
+  "schema_version": 1,
+  "secondary_historical": {
+    "adapter": {
+      "game_count": 64,
+      "mean_brier": 0.20324058957993546,
+      "mean_log_loss": 0.5849358219900921,
+      "teacher_mae": 0.09066151874999999,
+      "valid_count": 64,
+      "valid_only_mean_brier": 0.20324058957993546,
+      "valid_only_mean_log_loss": 0.5849358219900921,
+      "valid_only_teacher_mae": 0.09066151874999999
+    },
+    "adapter_minus_base_brier": 0.014195669747059214,
+    "adapter_minus_base_log_loss": 0.026104940445652702,
+    "adapter_minus_base_teacher_mae": -0.023620876562500018,
+    "base": {
+      "game_count": 64,
+      "mean_brier": 0.18904491983287625,
+      "mean_log_loss": 0.5588308815444394,
+      "teacher_mae": 0.1142823953125,
+      "valid_count": 64,
+      "valid_only_mean_brier": 0.18904491983287625,
+      "valid_only_mean_log_loss": 0.5588308815444394,
+      "valid_only_teacher_mae": 0.1142823953125
+    }
+  },
+  "warning": "Historical scores are contamination-prone diagnostics, not prospective evidence."
+}
