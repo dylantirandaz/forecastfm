@@ -1,0 +1,31 @@
+{
+  "adapter": {
+    "passed": true,
+    "probabilities": {
+      "opponent_wins": 0.3333333333333333,
+      "team_wins": 0.6666666666666667
+    },
+    "reason": null,
+    "response_token_count": 56,
+    "status": "completed",
+    "stop_reason": "stop",
+    "termination": "stop_sequence"
+  },
+  "attempt_sha256": "b91cf15e8ba05ee46c96c3c21117f4af4a9f7457be8a2e058495933620e9e0fa",
+  "base": {
+    "passed": true,
+    "probabilities": {
+      "opponent_wins": 0.45,
+      "team_wins": 0.55
+    },
+    "reason": null,
+    "response_token_count": 40,
+    "status": "completed",
+    "stop_reason": "stop",
+    "termination": "stop_sequence"
+  },
+  "kind": "forecastfm_format_smoke_result",
+  "passed": true,
+  "schema_version": 1,
+  "seal_sha256": "6f341c8f84f782a8b130efc3b7520b519d685b200417083c3c63dbbb3f9e4155"
+}

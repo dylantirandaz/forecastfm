@@ -1,0 +1,8 @@
+{
+  "adapter_sha256": "0672edeef352cf89143e1a6faf5936051bccb0a7b96eb4a1c2c7910659e44bc4",
+  "attempt_sha256": "b91cf15e8ba05ee46c96c3c21117f4af4a9f7457be8a2e058495933620e9e0fa",
+  "base_sha256": "936970c1a72db7f40fcb8fa5e6e6357e1f9ea005424f6b17ba41a22f00b4f735",
+  "kind": "forecastfm_format_smoke_seal",
+  "schema_version": 1,
+  "status": "sealed_before_gate"
+}

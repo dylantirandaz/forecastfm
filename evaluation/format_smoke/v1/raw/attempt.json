@@ -1,0 +1,31 @@
+{
+  "assistant_target_sent": false,
+  "decoding": {
+    "malformed_output_policy": "record_and_score_invalid",
+    "max_attempts": 1,
+    "max_tokens": 128,
+    "num_samples": 1,
+    "seed": 0,
+    "temperature": 0.0,
+    "tools_enabled": false,
+    "top_k": -1,
+    "top_p": 1.0
+  },
+  "experiment_sha256": "d580efb052eb9d88c91fb6bc5b10d248f68cacacd6ae8274a0e0b2b6eb6d5de9",
+  "kind": "forecastfm_format_smoke_attempt",
+  "model_roles": [
+    "base",
+    "adapter"
+  ],
+  "prompt_sha256": "dc7037a096f47b37805c58e54f48d11f715ca22e9056c71cc2c8b76058c90918",
+  "prompt_token_count": 182,
+  "protocol_revision": "dbaac32f5cde769551cfe0d9de452978e9b6edaa",
+  "renderer": "qwen3_5_disable_thinking",
+  "runner_sha256": "fa01219684c49540c7d00d82a25e82dc1f9a373221481dc0a0e7eb8d6bd86615",
+  "schema_version": 1,
+  "status": "started_before_remote_client",
+  "training_lock_sha256": "e5d4184b549c1f6895b8a932a97b308a2c2e0bae905dfae4403c89a660c09a72",
+  "training_path_sha256": "d7cbc3a1a5baaeed37161e859e52caa060aef647d1218f5bbaee737d136eee6f",
+  "training_renderer": "qwen3_5",
+  "training_row_index": 0
+}
