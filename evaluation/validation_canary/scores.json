@@ -1,0 +1,64 @@
+{
+  "commitments": {
+    "canary_manifest_sha256": "bb5396100c6867f4cca2ddbfffc600aef7109baeb8660055b3bc366a02d1c1f1",
+    "generation_seal_sha256": "f9a1b2b522230aa5f218d1d337341b6ccd261999904d5a94e2dada3f5a154bbb"
+  },
+  "kind": "forecastfm_validation_canary_scores",
+  "primary_answer_free": {
+    "adapter": {
+      "game_count": 64,
+      "oracle_mae": 1.0,
+      "schema_valid_rate": 0.0,
+      "side_swap_mae": 1.0,
+      "side_swap_valid_rate": 0.0,
+      "valid_only_oracle_mae": null,
+      "valid_only_side_swap_mae": null,
+      "valid_original_count": 0,
+      "valid_pair_count": 0,
+      "valid_pair_rate": 0.0,
+      "valid_side_swap_count": 0
+    },
+    "adapter_minus_base_oracle_mae": 0.0,
+    "adapter_minus_base_side_swap_mae": 0.0,
+    "base": {
+      "game_count": 64,
+      "oracle_mae": 1.0,
+      "schema_valid_rate": 0.0,
+      "side_swap_mae": 1.0,
+      "side_swap_valid_rate": 0.0,
+      "valid_only_oracle_mae": null,
+      "valid_only_side_swap_mae": null,
+      "valid_original_count": 0,
+      "valid_pair_count": 0,
+      "valid_pair_rate": 0.0,
+      "valid_side_swap_count": 0
+    }
+  },
+  "schema_version": 1,
+  "secondary_historical": {
+    "adapter": {
+      "game_count": 64,
+      "mean_brier": 1.0,
+      "mean_log_loss": 34.538776394910684,
+      "teacher_mae": 1.0,
+      "valid_count": 0,
+      "valid_only_mean_brier": null,
+      "valid_only_mean_log_loss": null,
+      "valid_only_teacher_mae": null
+    },
+    "adapter_minus_base_brier": 0.0,
+    "adapter_minus_base_log_loss": 0.0,
+    "adapter_minus_base_teacher_mae": 0.0,
+    "base": {
+      "game_count": 64,
+      "mean_brier": 1.0,
+      "mean_log_loss": 34.538776394910684,
+      "teacher_mae": 1.0,
+      "valid_count": 0,
+      "valid_only_mean_brier": null,
+      "valid_only_mean_log_loss": null,
+      "valid_only_teacher_mae": null
+    }
+  },
+  "warning": "Historical scores are contamination-prone diagnostics, not prospective evidence."
+}
