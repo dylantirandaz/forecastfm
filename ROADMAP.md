@@ -40,12 +40,18 @@ contamination-prone diagnostics; they do not establish forecasting improvement.
 Local completion provides tamper evidence, not trusted time. The first real prospective run also
 requires a protected remote or external timestamp receipt published before the earliest deadline.
 
-## 4. Proper-score optimization
+## 4. Realized-outcome optimization — locally implemented
 
-- Give the model tools for inspecting point-in-time numerical evidence and base rates.
-- Reward valid distributions with proper scoring rules.
-- Penalize future evidence, malformed output, and incoherent probabilities.
-- Keep the SFT model as a fixed baseline.
+- Map the realized winner to two verified single-token labels.
+- Train only the winner token with ordinary cross-entropy.
+- Convert candidate-token log-probabilities into a binary forecast without text generation.
+- Pair every fit and development game with its exact side swap.
+- Keep the old Elo-distillation adapter as a fixed historical baseline.
+- Run 32, 128, 512, and 2,048-step checkpoints only after freezing each paid protocol.
+
+Local implementation is not a forecasting result. Advancement requires improved chronological
+development log loss and Brier score, acceptable calibration, and side-swap consistency. The
+permanent test remains sealed until the recipe and checkpoint-selection rule are frozen.
 
 ## 5. General forecasting domains
 

@@ -4,9 +4,24 @@ import json
 from collections.abc import Iterable
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import TypedDict
+from typing import Literal, TypedDict, cast
 
+from forecastfm.json_utils import (
+    JsonFormatError,
+    parse_json_object,
+    require_exact_keys,
+    require_list,
+    require_object,
+    require_string,
+    required_field,
+)
 from forecastfm.models import ForecastCase, TrainingExample
+from forecastfm.outcome import (
+    OUTCOME_SYSTEM_PROMPT,
+    build_outcome_messages,
+    label_for_example,
+    require_label,
+)
 from forecastfm.prompting import ChatMessage, build_forecast_messages, build_sft_messages
 from forecastfm.tinker_screening import require_health_screen_passes
 
@@ -24,7 +39,15 @@ class ForecastRecord(TypedDict):
     messages: list[ChatMessage]
 
 
-type JsonlRecord = SftRecord | ForecastRecord
+class OutcomeTrainingRecord(TypedDict):
+    """A target-free prompt paired with a fixed realized-winner label."""
+
+    question_id: str
+    messages: list[ChatMessage]
+    label: str
+
+
+type JsonlRecord = SftRecord | ForecastRecord | OutcomeTrainingRecord
 
 
 def build_sft_record(example: TrainingExample) -> SftRecord:
@@ -41,6 +64,24 @@ def build_forecast_record(case: ForecastCase) -> ForecastRecord:
     )
 
 
+def build_outcome_training_record(example: TrainingExample) -> OutcomeTrainingRecord:
+    """Create an outcome record whose label comes only from the realized winner."""
+    require_health_screen_passes(example)
+    return OutcomeTrainingRecord(
+        question_id=example.case.question.question_id,
+        messages=list(build_outcome_messages(example.case)),
+        label=label_for_example(example),
+    )
+
+
+def build_outcome_forecast_record(case: ForecastCase) -> ForecastRecord:
+    """Create a target-free input for fixed-label outcome inference."""
+    return ForecastRecord(
+        question_id=case.question.question_id,
+        messages=list(build_outcome_messages(case)),
+    )
+
+
 def write_sft_jsonl(examples: Iterable[TrainingExample], path: Path) -> None:
     """Atomically write screened chat records without importing the Tinker SDK."""
     records = (build_sft_record(example) for example in examples)
@@ -51,6 +92,37 @@ def write_forecast_jsonl(cases: Iterable[ForecastCase], path: Path) -> None:
     """Atomically write target-free records for evaluation or inference."""
     records = (build_forecast_record(case) for case in cases)
     _write_jsonl(records, path)
+
+
+def write_outcome_training_jsonl(
+    examples: Iterable[TrainingExample],
+    path: Path,
+) -> None:
+    """Atomically write screened realized-winner classification records."""
+    records = (build_outcome_training_record(example) for example in examples)
+    _write_jsonl(records, path)
+
+
+def write_outcome_forecast_jsonl(cases: Iterable[ForecastCase], path: Path) -> None:
+    """Atomically write target-free fixed-label inference records."""
+    records = (build_outcome_forecast_record(case) for case in cases)
+    _write_jsonl(records, path)
+
+
+def read_outcome_training_jsonl(path: Path) -> tuple[OutcomeTrainingRecord, ...]:
+    """Read and strictly validate fixed-label outcome training records."""
+    records: list[OutcomeTrainingRecord] = []
+    with path.open(encoding="utf-8") as file:
+        for line_number, line in enumerate(file, start=1):
+            if not line.strip():
+                continue
+            try:
+                records.append(_parse_outcome_training_record(line))
+            except (JsonFormatError, ValueError) as error:
+                raise JsonFormatError(
+                    f"invalid outcome training record on line {line_number}"
+                ) from error
+    return tuple(records)
 
 
 def _write_jsonl(records: Iterable[JsonlRecord], path: Path) -> None:
@@ -73,3 +145,30 @@ def _write_jsonl(records: Iterable[JsonlRecord], path: Path) -> None:
         if partial_path is not None:
             partial_path.unlink(missing_ok=True)
         raise
+
+
+def _parse_outcome_training_record(text: str) -> OutcomeTrainingRecord:
+    record = parse_json_object(text)
+    require_exact_keys(record, {"question_id", "messages", "label"}, "outcome record")
+    question_id = require_string(required_field(record, "question_id"), "question_id")
+    label = require_label(require_string(required_field(record, "label"), "label"))
+    values = require_list(required_field(record, "messages"), "messages")
+    messages = [_parse_chat_message(value, index) for index, value in enumerate(values)]
+    if [message["role"] for message in messages] != ["system", "user"]:
+        raise JsonFormatError("outcome training messages must be target-free system and user turns")
+    if messages[0]["content"] != OUTCOME_SYSTEM_PROMPT:
+        raise JsonFormatError("outcome training record uses an unexpected system prompt")
+    return OutcomeTrainingRecord(question_id=question_id, messages=messages, label=label)
+
+
+def _parse_chat_message(value: object, index: int) -> ChatMessage:
+    field_name = f"messages[{index}]"
+    record = require_object(value, field_name)
+    require_exact_keys(record, {"role", "content"}, field_name)
+    role = require_string(required_field(record, "role"), f"{field_name}.role")
+    if role not in {"system", "user", "assistant"}:
+        raise JsonFormatError(f"unsupported message role: {role}")
+    return ChatMessage(
+        role=cast(Literal["system", "user", "assistant"], role),
+        content=require_string(required_field(record, "content"), f"{field_name}.content"),
+    )

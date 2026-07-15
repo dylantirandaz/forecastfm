@@ -14,6 +14,7 @@ The repository currently provides:
 - Bayesian updates in log-likelihood space;
 - proper scoring and calibration summaries;
 - a pinned, real NBA Elo forecast dataset with chronological splits;
+- a realized-winner outcome objective with side-swap augmentation;
 - strict JSONL serialization; and
 - a vendor-neutral chat-data export boundary with conservative health-term screening;
 - immutable training and experiment locks; and
@@ -59,9 +60,10 @@ so it is a real historical baseline—not a live 2026 forecast feed.
 The model sees only an anonymous question, a neutral-court Elo prior, and venue. It does not see
 the teams, game ID, date, source URL, teacher probability during evaluation, or realized winner.
 The build also quarantines four same-day games whose midnight cutoff is ambiguous, balances
-home and away perspectives, requires unique model-facing prompts across splits, and refuses
-one-hot training targets. The paid runner rejects stale prompt schemas and files whose hashes do
-not match the current manifest.
+home and away perspectives, and requires unique model-facing prompts across splits. The legacy
+Elo-distillation adapter uses sourced probability targets. Outcome v1 instead places the realized
+winner in a separate label field that is never included in the system or user message. Paid
+runners reject stale schemas and files whose hashes do not match their manifests and locks.
 
 This remains a formula-distillation benchmark: FiveThirtyEight's probability is almost exactly
 a fixed 100-Elo venue adjustment of the supplied neutral prior. Historical Brier score and log
@@ -105,7 +107,45 @@ and checkpoint metadata are written under the ignored `artifacts/` directory. Th
 creates a forecast-ready experiment lock from Tinker's permanent sampler path. Never place the API
 key in a source file.
 
-## Paired validation canary
+## Realized-winner outcome v1
+
+Outcome v1 leaves the completed Elo adapter and its frozen artifacts unchanged. It carves a new
+development period from the end of the pre-2010 training split, adds one side-swapped copy of every
+fit and development game, and trains on what actually happened:
+
+```text
+team_wins     -> TEAM
+opponent_wins -> OTHER
+```
+
+`OTHER` is intentional: the pinned Qwen tokenizer represents both labels as exactly one token,
+while literal `OPPONENT` is two tokens. The runner verifies the token count and exact round trip
+before any paid call. Cross-entropy has exactly one weighted position: the realized-winner token.
+The old FiveThirtyEight forecast remains baseline metadata and never chooses the training label.
+
+Build the ignored data plus its trackable manifest:
+
+```bash
+uv run python examples/build_outcome_dataset.py
+```
+
+After reviewing and committing the code and manifest, freeze and publish the new lock before
+starting the billable 32-step canary:
+
+```bash
+uv run --extra tinker python examples/freeze_outcome_training_lock.py
+git add prospective/outcome_v1/steps_32/training_lock.json
+git commit -m "Freeze outcome v1 training"
+git push origin main
+uv run --extra tinker python -m examples.run_tinker_outcome_sft_local
+```
+
+Inference does not sample a decimal or JSON response. It scores the `TEAM` and `OTHER` tokens with
+Tinker's prompt-log-probability API, renormalizes those two scores, and averages each forecast with
+the complemented side-swapped forecast. The unnormalized valid-label mass is retained as a
+diagnostic so renormalization cannot hide probability assigned to unrelated tokens.
+
+## Legacy paired validation canary
 
 The next gate is a frozen 64-game validation canary. Selection uses only the lexicographically
 first 64 opaque validation IDs; it never opens answers. Each game has one original and one
@@ -145,13 +185,15 @@ is not used by this workflow.
 - Probability vectors must be finite, non-negative, and sum to one.
 - Real data is split chronologically by season, never randomly by row.
 - Exact model-facing prompts cannot cross split boundaries.
-- Realized outcomes are evaluation labels, never one-hot SFT targets.
+- Realized outcomes are never model inputs. They are evaluation labels and, only for outcome v1,
+  fixed-token cross-entropy targets.
 - Evaluation files separate model prompts from answer keys.
 - Scoring a frozen cohort rejects missing, extra, duplicate, or relabeled forecasts.
 - Prospective batches retain exact prompts, raw responses, and one request identity per game.
 - Ledger validation rejects modified hashes, reordered records, late forecasts, and partial slates.
 - A ledger head counts as time evidence only after independent publication before the deadline.
-- Model targets contain sourced probabilities only; unsupported rationales are not fabricated.
+- Legacy Elo targets contain sourced probabilities. Outcome-v1 labels contain sourced game
+  results. Unsupported rationales are not fabricated.
 - Training exports screen for known health-data language before anything reaches Tinker.
   This keyword screen is only a first pass; it does not establish policy or legal compliance.
 - Player health and injury fields are not present in the accepted NBA input columns.
@@ -167,6 +209,8 @@ is not used by this workflow.
 - `prompting.py`: the model prompt and strict prediction parser.
 - `tinker_data.py`: screened SFT conversation export without SDK coupling.
 - `run_config.py`: explicit model, tokenizer, training, and decoding settings.
+- `outcome.py`: fixed labels, outcome prompts, stable normalization, and symmetry averaging.
+- `outcome_config.py`: readable outcome-v1 canary and scaling settings.
 - `run_lock.py`: immutable training and trained-sampler experiment locks.
 - `ledger.py`: prospective cohort validation and append-only hash-chain verification.
 - `canary.py`: frozen validation call plans, generation records, seals, and answer-free metrics.
@@ -174,10 +218,10 @@ is not used by this workflow.
 
 ## Next milestones
 
-1. Measure base-model JSON validity and fidelity to the analytic Elo oracle.
-2. Run the first small Tinker SFT and compare it on the identical anonymous cohort.
-3. Publish the frozen experiment and first complete future-game cohort to a protected remote.
-4. Commit forecasts before tipoff and score them only after appending sourced resolutions.
-5. Add richer licensed or buyer-owned NBA inputs only after the baseline is sound.
+1. Run the 32-step outcome canary and score the clean chronological development period.
+2. Continue to 128, 512, and 2,048 steps only while outcome log loss improves.
+3. Compare against Elo with Brier, log loss, calibration, and side-swap consistency.
+4. Freeze the winning recipe before opening any later holdout.
+5. Add richer point-in-time NBA inputs only after the outcome baseline is sound.
 
 See [ROADMAP.md](ROADMAP.md) for the acceptance criteria for each milestone.

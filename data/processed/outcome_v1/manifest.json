@@ -1,0 +1,65 @@
+{
+  "anti_cheating": {
+    "messages_are_target_free": true,
+    "model_sees": [
+      "anonymous question",
+      "neutral Elo prior",
+      "venue"
+    ],
+    "postgame_fields_in_messages": false,
+    "realized_winner_location": "label field only",
+    "teacher_probability_in_messages": false,
+    "warning": "The inputs remain narrow. Outcome training can learn Elo and venue corrections, but richer forecasting requires more point-in-time pregame evidence."
+  },
+  "built_at": "2026-07-15T19:11:18.211976+00:00",
+  "objective": {
+    "augmented_fit_label_counts": {
+      "opponent_wins": 48618,
+      "team_wins": 48618
+    },
+    "label_note": "OTHER means opponent wins. Literal OPPONENT is not one token under the pinned Qwen3.5 tokenizer.",
+    "labels": {
+      "opponent_wins": "OTHER",
+      "team_wins": "TEAM"
+    },
+    "loss": "cross-entropy on the realized winner label",
+    "original_fit_label_counts": {
+      "opponent_wins": 24472,
+      "team_wins": 24146
+    },
+    "teacher_forecast_role": "stored baseline metadata; never an outcome training label"
+  },
+  "outcome_input_schema_version": 1,
+  "outputs": {
+    "nba_development_answers.jsonl": "297cfefe9537e777a3b7c22901b1778fe5da247e9fa8ca64ee87b5d74b8c9380",
+    "nba_development_prompts.jsonl": "72cb7dd8ec8d390053277af3c7b991d48403ee075b566c64c24f828f6b059341",
+    "nba_train_outcome.jsonl": "8572d81dbda7c85cc79390b2b94fb8fcf71cd06f8e1c7f80589c9ea929cfdf78"
+  },
+  "schema_version": 1,
+  "side_swap": {
+    "each_original_has_one_swap": true,
+    "enabled": true,
+    "swapped_fields": [
+      "prior",
+      "venue",
+      "teacher probability",
+      "realized winner"
+    ]
+  },
+  "source": {
+    "manifest_path": "data/processed/manifest.json",
+    "manifest_sha256": "7cdc6959011c0f7526e626c63b55cef33553805c195c30fe2eac86b52d61c025",
+    "training_path": "data/processed/nba_elo_train.jsonl",
+    "training_sha256": "b4d4e079773e859b86070e64054cc011a5d96d5adbb74a5431a51b5fecd913ec"
+  },
+  "split": {
+    "development_original_rows": 2620,
+    "development_rows_after_side_swap": 5240,
+    "development_start": "2007-07-01T00:00:00+00:00",
+    "fit_original_rows": 48618,
+    "fit_rows_after_side_swap": 97236,
+    "later_validation_opened": false,
+    "method": "chronological cutoff inside the legacy pre-2010 training split",
+    "permanent_test_opened": false
+  }
+}

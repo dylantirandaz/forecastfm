@@ -2,7 +2,7 @@
 
 import csv
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from math import isfinite
@@ -46,6 +46,7 @@ DATE_AMBIGUOUS_GAME_IDS = frozenset(
         "198304131SAS",
     }
 )
+SIDE_SWAP_SUFFIX = "-side-swap"
 
 _REQUIRED_COLUMNS = {
     "_iscopy",
@@ -284,9 +285,75 @@ def elo_venue_probability(neutral_probability: float, location: str) -> float:
     return adjusted_odds / (1.0 + adjusted_odds)
 
 
+def side_swap_nba_case(case: ForecastCase) -> ForecastCase:
+    """Exchange the listed team and opponent in an anonymous NBA case."""
+    if case.question.outcomes != ("team_wins", "opponent_wins"):
+        raise NbaDataError("NBA side swap requires canonical binary outcomes")
+    if len(case.evidence) != 1:
+        raise NbaDataError("NBA side swap requires exactly one venue card")
+
+    card = case.evidence[0]
+    location = _venue_from_text(card.text)
+    swapped_location = {"away": "home", "home": "away", "neutral": "neutral"}[location]
+    swapped_question = replace(
+        case.question,
+        question_id=_side_swap_question_id(case.question.question_id),
+    )
+    swapped_prior = Distribution(
+        outcomes=case.prior.outcomes,
+        probabilities=tuple(reversed(case.prior.probabilities)),
+    )
+    swapped_card = replace(card, text=f"Venue for the listed team: {swapped_location}.")
+    return replace(
+        case,
+        question=swapped_question,
+        prior=swapped_prior,
+        evidence=(swapped_card,),
+    )
+
+
+def side_swap_nba_example(example: TrainingExample) -> TrainingExample:
+    """Exchange sides, teacher probabilities, and winner in an NBA example."""
+    if example.realized_outcome == "team_wins":
+        swapped_outcome = "opponent_wins"
+    elif example.realized_outcome == "opponent_wins":
+        swapped_outcome = "team_wins"
+    else:
+        raise NbaDataError("NBA side-swap training requires a realized winner")
+
+    swapped_target = ForecastPrediction(
+        distribution=Distribution(
+            outcomes=example.target.distribution.outcomes,
+            probabilities=tuple(reversed(example.target.distribution.probabilities)),
+        )
+    )
+    return replace(
+        example,
+        case=side_swap_nba_case(example.case),
+        target=swapped_target,
+        realized_outcome=swapped_outcome,
+    )
+
+
 def _binary_probabilities(team_probability: float) -> tuple[float, float]:
     rounded_probability = round(team_probability, 7)
     return rounded_probability, round(1.0 - rounded_probability, 7)
+
+
+def _venue_from_text(text: str) -> str:
+    prefix = "Venue for the listed team: "
+    if not text.startswith(prefix) or not text.endswith("."):
+        raise NbaDataError("NBA side swap found an unexpected venue card")
+    location = text.removeprefix(prefix).removesuffix(".")
+    if location not in _VENUE_ELO_ADJUSTMENT:
+        raise NbaDataError("NBA side swap found an unknown venue")
+    return location
+
+
+def _side_swap_question_id(question_id: str) -> str:
+    if question_id.endswith(SIDE_SWAP_SUFFIX):
+        return question_id.removesuffix(SIDE_SWAP_SUFFIX)
+    return f"{question_id}{SIDE_SWAP_SUFFIX}"
 
 
 def _selected_copy(game_id: str) -> str:
