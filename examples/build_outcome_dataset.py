@@ -4,6 +4,7 @@ import json
 from collections import Counter
 from collections.abc import Iterable
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 
 from forecastfm.json_utils import (
@@ -26,6 +27,7 @@ from forecastfm.tinker_data import (
     write_outcome_forecast_jsonl,
     write_outcome_training_jsonl,
 )
+from forecastfm.prompting import render_case
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_MANIFEST_PATH = PROJECT_ROOT / "data" / "processed" / "manifest.json"
@@ -44,7 +46,11 @@ def main() -> None:
     """Create a pre-2010 fit/development split without opening later splits."""
     _verify_source_training_file()
     examples = read_jsonl(SOURCE_TRAIN_PATH)
-    fit, development = _chronological_split(examples)
+    fit, unfiltered_development = _chronological_split(examples)
+    development, removed_development_ids = _remove_fit_prompt_overlaps(
+        fit,
+        unfiltered_development,
+    )
 
     OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
     write_outcome_training_jsonl(_side_swap_pairs(fit), TRAIN_PATH)
@@ -70,8 +76,11 @@ def main() -> None:
             "development_start": DEVELOPMENT_START.isoformat(),
             "fit_original_rows": len(fit),
             "fit_rows_after_side_swap": len(fit) * 2,
+            "development_original_rows_before_overlap_filter": len(unfiltered_development),
             "development_original_rows": len(development),
             "development_rows_after_side_swap": len(development) * 2,
+            "development_pair_orbits_removed_for_fit_overlap": len(removed_development_ids),
+            "removed_development_question_ids": list(removed_development_ids),
             "later_validation_opened": False,
             "permanent_test_opened": False,
         },
@@ -95,6 +104,7 @@ def main() -> None:
         "side_swap": {
             "enabled": True,
             "each_original_has_one_swap": True,
+            "adjacent_original_swap_pairs": True,
             "swapped_fields": ["prior", "venue", "teacher probability", "realized winner"],
         },
         "anti_cheating": {
@@ -102,6 +112,7 @@ def main() -> None:
             "messages_are_target_free": True,
             "teacher_probability_in_messages": False,
             "postgame_fields_in_messages": False,
+            "augmented_fit_development_prompt_overlap": 0,
             "model_sees": ["anonymous question", "neutral Elo prior", "venue"],
             "warning": (
                 "The inputs remain narrow. Outcome training can learn Elo and venue corrections, "
@@ -158,6 +169,37 @@ def _side_swap_pairs(examples: Iterable[TrainingExample]) -> Iterable[TrainingEx
     for example in examples:
         yield example
         yield side_swap_nba_example(example)
+
+
+def _remove_fit_prompt_overlaps(
+    fit: tuple[TrainingExample, ...],
+    development: tuple[TrainingExample, ...],
+) -> tuple[tuple[TrainingExample, ...], tuple[str, ...]]:
+    fit_hashes = {
+        _prompt_hash(example)
+        for original in fit
+        for example in (original, side_swap_nba_example(original))
+    }
+    kept: list[TrainingExample] = []
+    removed_ids: list[str] = []
+    for original in development:
+        pair = (original, side_swap_nba_example(original))
+        if any(_prompt_hash(example) in fit_hashes for example in pair):
+            removed_ids.append(original.case.question.question_id)
+        else:
+            kept.append(original)
+    kept_hashes = {
+        _prompt_hash(example)
+        for original in kept
+        for example in (original, side_swap_nba_example(original))
+    }
+    if fit_hashes & kept_hashes:
+        raise RuntimeError("outcome fit and development prompts overlap after side swaps")
+    return tuple(kept), tuple(sorted(removed_ids))
+
+
+def _prompt_hash(example: TrainingExample) -> str:
+    return sha256(render_case(example.case).encode()).hexdigest()
 
 
 def _require_outcome(example: TrainingExample) -> str:

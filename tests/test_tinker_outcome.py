@@ -14,6 +14,7 @@ from examples.train_tinker_outcome_sft import OutcomeDataset
 from tinker_cookbook import renderers
 
 from forecastfm.integrity import file_sha256
+from forecastfm.nba_data import side_swap_nba_example
 from forecastfm.outcome import OPPONENT_LABEL, OUTCOME_INPUT_SCHEMA_VERSION, TEAM_LABEL
 from forecastfm.run_lock import RunLockError
 from forecastfm.tinker_data import build_outcome_training_record, write_outcome_training_jsonl
@@ -107,14 +108,20 @@ def _configure_prerequisites(
 
 
 def test_outcome_datum_trains_only_the_realized_winner_token() -> None:
-    record = build_outcome_training_record(make_nba_training_example("team_wins"))
-    dataset = OutcomeDataset((record,), _renderer(), (10, 20), batch_size=1, max_length=32)
+    original = make_nba_training_example("team_wins")
+    swapped = side_swap_nba_example(original)
+    records = (
+        build_outcome_training_record(original),
+        build_outcome_training_record(swapped),
+    )
+    dataset = OutcomeDataset(records, _renderer(), (10, 20), batch_size=2, max_length=32)
 
-    datum = dataset.get_batch(0)[0]
+    team_datum, opponent_datum = dataset.get_batch(0)
 
-    assert datum.model_input.to_ints() == [1, 2, 3]
-    assert datum.loss_fn_inputs["target_tokens"].data == [2, 3, 10]
-    assert datum.loss_fn_inputs["weights"].data == [0.0, 0.0, 1.0]
+    assert team_datum.model_input.to_ints() == [1, 2, 3]
+    assert team_datum.loss_fn_inputs["target_tokens"].data == [2, 3, 10]
+    assert team_datum.loss_fn_inputs["weights"].data == [0.0, 0.0, 1.0]
+    assert opponent_datum.loss_fn_inputs["target_tokens"].data == [2, 3, 20]
 
 
 def test_outcome_runner_accepts_verified_local_inputs(
@@ -138,6 +145,19 @@ def test_outcome_runner_rejects_an_unsealed_configuration(
     monkeypatch.setattr(train_tinker_outcome_sft, "verify_outcome_training_lock", reject_lock)
 
     with pytest.raises(RunLockError, match="differs"):
+        train_tinker_outcome_sft.require_prerequisites()
+
+
+def test_outcome_runner_refuses_to_resume_an_existing_log(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_prerequisites(tmp_path, monkeypatch)
+    log_path = tmp_path / "existing-log"
+    log_path.mkdir()
+    monkeypatch.setattr(train_tinker_outcome_sft, "LOG_PATH", log_path)
+
+    with pytest.raises(FileExistsError, match="already exists"):
         train_tinker_outcome_sft.require_prerequisites()
 
 

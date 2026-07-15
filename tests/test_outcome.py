@@ -5,6 +5,7 @@ from math import log
 from pathlib import Path
 
 import pytest
+from examples import build_outcome_dataset
 
 from forecastfm.nba_data import side_swap_nba_example
 from forecastfm.outcome import (
@@ -115,6 +116,25 @@ def test_side_swap_is_an_involution() -> None:
     assert swapped.target.distribution.probabilities == (0.8, 0.2)
     assert swapped.realized_outcome == "opponent_wins"
     assert side_swap_nba_example(swapped) == original
+
+
+def test_augmented_development_prompt_collision_is_removed() -> None:
+    fit = make_nba_training_example("team_wins")
+    collision = replace(
+        fit,
+        case=replace(
+            fit.case,
+            question=replace(fit.case.question, question_id="development-collision"),
+        ),
+    )
+
+    kept, removed_ids = build_outcome_dataset._remove_fit_prompt_overlaps(
+        (fit,),
+        (collision,),
+    )
+
+    assert kept == ()
+    assert removed_ids == ("development-collision",)
 
 
 def test_symmetric_probability_averages_the_complemented_swap() -> None:

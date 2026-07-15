@@ -19,7 +19,7 @@ from forecastfm.json_utils import (
     require_string,
     required_field,
 )
-from forecastfm.nba_data import file_sha256
+from forecastfm.nba_data import SIDE_SWAP_SUFFIX, file_sha256
 from forecastfm.outcome import (
     OPPONENT_LABEL,
     OUTCOME_INPUT_SCHEMA_VERSION,
@@ -65,29 +65,49 @@ class OutcomeDataset(SupervisedDataset):
         self._records = records
         self._renderer = renderer
         self._label_token_ids = label_token_ids
-        self._batch_size = batch_size
         self._max_length = max_length
-        self._order = list(range(len(records)))
+        if batch_size % 2 != 0:
+            raise RuntimeError("outcome batch size must contain complete side-swap pairs")
+        if len(records) % 2 != 0:
+            raise RuntimeError("outcome dataset has an incomplete side-swap pair")
+        self._pairs_per_batch = batch_size // 2
+        self._validate_pairs()
+        self._pair_order = list(range(len(records) // 2))
 
     @override
     def get_batch(self, index: int) -> list[tinker.Datum]:
         """Render one complete batch at the requested shuffled index."""
         if not 0 <= index < len(self):
             raise IndexError(f"outcome batch index is out of range: {index}")
-        start = index * self._batch_size
-        positions = self._order[start : start + self._batch_size]
+        start = index * self._pairs_per_batch
+        pair_positions = self._pair_order[start : start + self._pairs_per_batch]
+        positions = [
+            record_position
+            for pair_position in pair_positions
+            for record_position in (pair_position * 2, pair_position * 2 + 1)
+        ]
         return [self._datum(self._records[position]) for position in positions]
 
     @override
     def __len__(self) -> int:
         """Return the number of complete, fixed-size batches."""
-        return len(self._records) // self._batch_size
+        return len(self._pair_order) // self._pairs_per_batch
 
     @override
     def set_epoch(self, seed: int = 0) -> None:
         """Recreate and deterministically shuffle the row order."""
-        self._order = list(range(len(self._records)))
-        Random(seed).shuffle(self._order)
+        self._pair_order = list(range(len(self._records) // 2))
+        Random(seed).shuffle(self._pair_order)
+
+    def _validate_pairs(self) -> None:
+        for index in range(0, len(self._records), 2):
+            original = self._records[index]
+            swapped = self._records[index + 1]
+            expected_swapped_id = f"{original['question_id']}{SIDE_SWAP_SUFFIX}"
+            if swapped["question_id"] != expected_swapped_id:
+                raise RuntimeError("outcome records are not adjacent side-swap pairs")
+            if original["label"] == swapped["label"]:
+                raise RuntimeError("outcome side-swap pair must have opposite labels")
 
     def _datum(self, record: OutcomeTrainingRecord) -> tinker.Datum:
         messages = [
@@ -176,6 +196,8 @@ def require_prerequisites() -> None:
         raise RuntimeError("Outcome training data differs from its manifest; rebuild it.")
 
     verify_outcome_training_lock(PROJECT_ROOT, TRAINING_LOCK_PATH)
+    if LOG_PATH.exists():
+        raise FileExistsError(f"outcome training log already exists: {LOG_PATH}")
     records = read_outcome_training_jsonl(DATA_PATH)
     if len(records) < BATCH_SIZE:
         raise RuntimeError("Outcome training data does not contain one complete batch")

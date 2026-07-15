@@ -32,6 +32,7 @@ def outcome_training_settings() -> dict[str, object]:
         "eval_every": 0,
         "infrequent_eval_every": 0,
         "submit_ahead": 0,
+        "resume_existing_log": False,
     }
 
 
