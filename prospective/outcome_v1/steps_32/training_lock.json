@@ -1,0 +1,83 @@
+{
+  "code_files": {
+    "examples/build_outcome_dataset.py": "83f51b8046cae0abe227a3e9936d03563cbd653136bf731ef5a64a5f0d6beb58",
+    "examples/tinker_outcome_inference.py": "b6258a3b320a482d0d537ffc790e57b818d3e743e5607a9e0fb363f896b95ed7",
+    "examples/train_tinker_outcome_sft.py": "ca53ef5476e70a84825b0d492f9333089dc8673afeba03b3b489b813c2dbad14",
+    "src/forecastfm/nba_data.py": "33f20857250f0133fb7b8f39134b3a1fe4fb8f93368b944ab87aa5a84e2bb4c9",
+    "src/forecastfm/outcome.py": "6602883eefa775308d018343991ecd9d9b5a9a125b80da5581a2191da6631661",
+    "src/forecastfm/outcome_config.py": "7ca5ba353674519eb28567e31d93232cdded3cb8da7ec1808c79d15ff202bcf6",
+    "src/forecastfm/run_config.py": "724bba74ab1b748bf009ceb1ed3a1100ae98cacc41fd8f7c2d865d37cf3f7f02",
+    "src/forecastfm/tinker_data.py": "85d7d76b3f9a05b4b05a1d62dbb8728d43211a7fab34376bcf16ede862ce54d8"
+  },
+  "code_revision": "316ad799c4ba788cf0c09ef6b9012a08a1a47cf3",
+  "created_at": "2026-07-15T20:43:41.797363+00:00",
+  "data": {
+    "manifest_path": "data/processed/outcome_v1/manifest.json",
+    "manifest_sha256": "e09de9492595b6db1df1b12da973b3a8acd7fba593c349e979bb100aaf190854",
+    "training_path": "data/processed/outcome_v1/nba_train_outcome.jsonl",
+    "training_sha256": "8572d81dbda7c85cc79390b2b94fb8fcf71cd06f8e1c7f80589c9ea929cfdf78"
+  },
+  "decoding": {
+    "labels": [
+      "TEAM",
+      "OTHER"
+    ],
+    "logical_calls_per_orientation": 2,
+    "logical_calls_per_symmetric_forecast": 4,
+    "method": "renormalized_candidate_token_logprobs",
+    "orientations_per_forecast": 2,
+    "side_swap_averaging": true,
+    "text_generation": false
+  },
+  "kind": "forecastfm_outcome_training_lock",
+  "model": {
+    "base_model": "Qwen/Qwen3.5-4B",
+    "chat_template_sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+    "provider": "Tinker",
+    "renderer": "qwen3_5_disable_thinking",
+    "server_weight_revision": null,
+    "server_weight_revision_note": "Tinker exposes a catalog model name, not a base-weight digest. The final sampler path is the authoritative trained policy identity.",
+    "tokenizer_config_sha256": "316230d6a809701f4db5ea8f8fc862bc3a6f3229c937c174e674ff3ca0a64ac8",
+    "tokenizer_hugging_face_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+    "tokenizer_json_sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+  },
+  "model_reference_sha256": "9c0becaeb67490fefaa9568b1e34e6ba3711898a29a9c864a23663f938a6f49d",
+  "packages": {
+    "tinker": "0.22.7",
+    "tinker_cookbook": "0.4.3"
+  },
+  "prompt": {
+    "outcome_input_schema_version": 2,
+    "outcome_module_sha256": "6602883eefa775308d018343991ecd9d9b5a9a125b80da5581a2191da6631661",
+    "system_prompt": "You are ForecastFM, a calibrated probabilistic forecaster.\nUse only the prior and evidence supplied to you.\nForecast which side will win.\nReturn exactly TEAM if the listed team will win.\nReturn exactly OTHER if the opponent will win.\nDo not return JSON, punctuation, or an explanation.",
+    "system_prompt_sha256": "1f4b7487f5b46ca3fed018a252ebe931ac29c7c0921d23f3b865538160bac089"
+  },
+  "schema_version": 1,
+  "status": "awaiting_trained_sampler",
+  "training": {
+    "batch_size": 8,
+    "eval_every": 0,
+    "infrequent_eval_every": 0,
+    "labels": [
+      "TEAM",
+      "OTHER"
+    ],
+    "learning_rate": 0.0001,
+    "lora_rank": 16,
+    "max_length": 2048,
+    "max_steps": 32,
+    "num_epochs": 1,
+    "objective": "realized_winner_cross_entropy",
+    "planned_scaling_steps": [
+      32,
+      128,
+      512,
+      2048
+    ],
+    "renderer": "qwen3_5_disable_thinking",
+    "resume_existing_log": false,
+    "save_every": 32,
+    "submit_ahead": 0
+  },
+  "uv_lock_sha256": "3edf0756f7d82977313fed2c7d452be5138f4a6ef7543a47c6b784b963a6deb5"
+}
