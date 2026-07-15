@@ -1,6 +1,7 @@
 """Deterministic Tinker inference for the two outcome-label tokens."""
 
 import asyncio
+from collections.abc import Sequence
 from dataclasses import dataclass
 from math import exp, isfinite
 from typing import Protocol
@@ -56,7 +57,21 @@ async def score_outcome_case(
     label_token_ids: tuple[int, int],
 ) -> OutcomeLogprobForecast:
     """Score both fixed labels without sampling generated text."""
-    messages = build_outcome_messages(case)
+    return await score_outcome_messages(
+        client,
+        renderer,
+        build_outcome_messages(case),
+        label_token_ids,
+    )
+
+
+async def score_outcome_messages(
+    client: CandidateLogprobClient,
+    renderer: renderers.Renderer,
+    messages: Sequence[ChatMessage],
+    label_token_ids: tuple[int, int],
+) -> OutcomeLogprobForecast:
+    """Score one already-frozen, target-free orientation."""
     prompt = renderer.build_generation_prompt(_renderer_messages(messages))
     team_token, opponent_token = label_token_ids
     team_logprob, opponent_logprob = await asyncio.gather(
@@ -82,9 +97,26 @@ async def score_symmetric_outcome_case(
     label_token_ids: tuple[int, int],
 ) -> SymmetricOutcomeForecast:
     """Score both orientations and average complementary probabilities."""
+    return await score_symmetric_outcome_messages(
+        client,
+        renderer,
+        build_outcome_messages(case),
+        build_outcome_messages(side_swap_nba_case(case)),
+        label_token_ids,
+    )
+
+
+async def score_symmetric_outcome_messages(
+    client: CandidateLogprobClient,
+    renderer: renderers.Renderer,
+    original_messages: Sequence[ChatMessage],
+    swapped_messages: Sequence[ChatMessage],
+    label_token_ids: tuple[int, int],
+) -> SymmetricOutcomeForecast:
+    """Score one frozen original/swap prompt pair exactly once."""
     original, swapped = await asyncio.gather(
-        score_outcome_case(client, renderer, case, label_token_ids),
-        score_outcome_case(client, renderer, side_swap_nba_case(case), label_token_ids),
+        score_outcome_messages(client, renderer, original_messages, label_token_ids),
+        score_outcome_messages(client, renderer, swapped_messages, label_token_ids),
     )
     original_team = original.prediction.distribution.probability_for("team_wins")
     swapped_team = swapped.prediction.distribution.probability_for("team_wins")
@@ -119,7 +151,7 @@ async def _label_logprob(
     return value
 
 
-def _renderer_messages(messages: tuple[ChatMessage, ...]) -> list[renderers.Message]:
+def _renderer_messages(messages: Sequence[ChatMessage]) -> list[renderers.Message]:
     return [
         renderers.Message(role=message["role"], content=message["content"]) for message in messages
     ]

@@ -21,7 +21,10 @@ from forecastfm.outcome import (
 )
 from forecastfm.tinker_data import (
     build_outcome_training_record,
+    pair_outcome_forecast_records,
+    read_outcome_forecast_jsonl,
     read_outcome_training_jsonl,
+    write_outcome_forecast_jsonl,
     write_outcome_training_jsonl,
 )
 from tests.helpers import make_nba_training_example
@@ -83,6 +86,20 @@ def test_outcome_training_jsonl_round_trip(tmp_path: Path) -> None:
 
     records = read_outcome_training_jsonl(path)
     assert [record["label"] for record in records] == [TEAM_LABEL, OPPONENT_LABEL]
+
+
+def test_outcome_forecast_pairs_are_read_without_answers(tmp_path: Path) -> None:
+    original = make_nba_training_example("team_wins")
+    swapped = side_swap_nba_example(original)
+    path = tmp_path / "prompts.jsonl"
+    write_outcome_forecast_jsonl((original.case, swapped.case), path)
+
+    pairs = pair_outcome_forecast_records(read_outcome_forecast_jsonl(path))
+
+    assert len(pairs) == 1
+    assert pairs[0][0]["question_id"] == original.case.question.question_id
+    assert pairs[0][1]["question_id"] == swapped.case.question.question_id
+    assert all("label" not in record for record in pairs[0])
 
 
 def test_labels_must_be_distinct_exact_single_tokens() -> None:

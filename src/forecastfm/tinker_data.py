@@ -16,6 +16,7 @@ from forecastfm.json_utils import (
     required_field,
 )
 from forecastfm.models import ForecastCase, TrainingExample
+from forecastfm.nba_data import SIDE_SWAP_SUFFIX
 from forecastfm.outcome import (
     OUTCOME_SYSTEM_PROMPT,
     build_outcome_messages,
@@ -125,6 +126,43 @@ def read_outcome_training_jsonl(path: Path) -> tuple[OutcomeTrainingRecord, ...]
     return tuple(records)
 
 
+def read_outcome_forecast_jsonl(path: Path) -> tuple[ForecastRecord, ...]:
+    """Read target-free fixed-label inference records."""
+    records: list[ForecastRecord] = []
+    with path.open(encoding="utf-8") as file:
+        for line_number, line in enumerate(file, start=1):
+            if not line.strip():
+                continue
+            try:
+                records.append(_parse_outcome_forecast_record(line))
+            except (JsonFormatError, ValueError) as error:
+                raise JsonFormatError(
+                    f"invalid outcome forecast record on line {line_number}"
+                ) from error
+    return tuple(records)
+
+
+def pair_outcome_forecast_records(
+    records: tuple[ForecastRecord, ...],
+) -> tuple[tuple[ForecastRecord, ForecastRecord], ...]:
+    """Group adjacent original/swap prompts without opening answer records."""
+    if len(records) % 2 != 0:
+        raise JsonFormatError("outcome forecast records contain an incomplete side-swap pair")
+    pairs: list[tuple[ForecastRecord, ForecastRecord]] = []
+    seen_ids: set[str] = set()
+    for index in range(0, len(records), 2):
+        original = records[index]
+        swapped = records[index + 1]
+        pair_ids = {original["question_id"], swapped["question_id"]}
+        if seen_ids & pair_ids:
+            raise JsonFormatError("outcome forecast records contain duplicate IDs")
+        seen_ids.update(pair_ids)
+        if swapped["question_id"] != f"{original['question_id']}{SIDE_SWAP_SUFFIX}":
+            raise JsonFormatError("outcome forecast records are not adjacent side-swap pairs")
+        pairs.append((original, swapped))
+    return tuple(pairs)
+
+
 def _write_jsonl(records: Iterable[JsonlRecord], path: Path) -> None:
     partial_path: Path | None = None
     try:
@@ -159,6 +197,19 @@ def _parse_outcome_training_record(text: str) -> OutcomeTrainingRecord:
     if messages[0]["content"] != OUTCOME_SYSTEM_PROMPT:
         raise JsonFormatError("outcome training record uses an unexpected system prompt")
     return OutcomeTrainingRecord(question_id=question_id, messages=messages, label=label)
+
+
+def _parse_outcome_forecast_record(text: str) -> ForecastRecord:
+    record = parse_json_object(text)
+    require_exact_keys(record, {"question_id", "messages"}, "outcome forecast record")
+    question_id = require_string(required_field(record, "question_id"), "question_id")
+    values = require_list(required_field(record, "messages"), "messages")
+    messages = [_parse_chat_message(value, index) for index, value in enumerate(values)]
+    if [message["role"] for message in messages] != ["system", "user"]:
+        raise JsonFormatError("outcome forecast messages must be target-free system and user turns")
+    if messages[0]["content"] != OUTCOME_SYSTEM_PROMPT:
+        raise JsonFormatError("outcome forecast record uses an unexpected system prompt")
+    return ForecastRecord(question_id=question_id, messages=messages)
 
 
 def _parse_chat_message(value: object, index: int) -> ChatMessage:

@@ -10,15 +10,24 @@ from typing import cast
 import pytest
 import tinker
 from examples import train_tinker_outcome_sft
-from examples.tinker_outcome_inference import score_outcome_case, score_symmetric_outcome_case
+from examples.tinker_outcome_inference import (
+    score_outcome_case,
+    score_symmetric_outcome_case,
+    score_symmetric_outcome_messages,
+)
 from examples.train_tinker_outcome_sft import OutcomeDataset
 from tinker_cookbook import renderers
 
 from forecastfm.integrity import file_sha256
+from forecastfm.models import TrainingExample
 from forecastfm.nba_data import side_swap_nba_example
 from forecastfm.outcome import OPPONENT_LABEL, OUTCOME_INPUT_SCHEMA_VERSION, TEAM_LABEL
 from forecastfm.run_lock import RunLockError
-from forecastfm.tinker_data import build_outcome_training_record, write_outcome_training_jsonl
+from forecastfm.tinker_data import (
+    build_outcome_forecast_record,
+    build_outcome_training_record,
+    write_outcome_training_jsonl,
+)
 from tests.helpers import make_nba_training_example
 
 
@@ -92,7 +101,7 @@ def _configure_prerequisites(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     data_path = tmp_path / "nba_train_outcome.jsonl"
-    pairs = []
+    pairs: list[TrainingExample] = []
     for index in range(train_tinker_outcome_sft.BATCH_SIZE // 2):
         template = make_nba_training_example()
         original = replace(
@@ -233,5 +242,26 @@ def test_symmetric_inference_averages_original_and_swapped_orientation() -> None
         0.8
     )
     assert result.swapped.prediction.distribution.probability_for("team_wins") == pytest.approx(0.8)
+    assert result.prediction.distribution.probability_for("team_wins") == pytest.approx(0.5)
+    assert len(client.calls) == 4
+
+
+def test_symmetric_inference_accepts_frozen_target_free_messages() -> None:
+    client = FakeLogprobClient({10: log(0.4), 20: log(0.1)})
+    original = make_nba_training_example().case
+    swapped = side_swap_nba_example(make_nba_training_example()).case
+    original_record = build_outcome_forecast_record(original)
+    swapped_record = build_outcome_forecast_record(swapped)
+
+    result = asyncio.run(
+        score_symmetric_outcome_messages(
+            client,
+            _renderer(),
+            original_record["messages"],
+            swapped_record["messages"],
+            (10, 20),
+        )
+    )
+
     assert result.prediction.distribution.probability_for("team_wins") == pytest.approx(0.5)
     assert len(client.calls) == 4

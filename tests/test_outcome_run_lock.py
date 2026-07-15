@@ -61,3 +61,13 @@ def test_outcome_training_lock_rejects_changed_objective_code(tmp_path: Path) ->
 
     with pytest.raises(RunLockError, match="differs"):
         verify_outcome_training_lock(tmp_path, path)
+
+
+def test_outcome_training_lock_rejects_changed_model_config(tmp_path: Path) -> None:
+    _make_project(tmp_path)
+    path = tmp_path / "outcome_training_lock.json"
+    write_new_lock(path, build_outcome_training_lock(tmp_path, REVISION, CREATED_AT))
+    (tmp_path / "src/forecastfm/run_config.py").write_text("changed\n", encoding="utf-8")
+
+    with pytest.raises(RunLockError, match="differs"):
+        verify_outcome_training_lock(tmp_path, path)

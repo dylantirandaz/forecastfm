@@ -1,5 +1,6 @@
 {
   "anti_cheating": {
+    "augmented_fit_development_prompt_overlap": 0,
     "messages_are_target_free": true,
     "model_sees": [
       "anonymous question",
@@ -9,9 +10,10 @@
     "postgame_fields_in_messages": false,
     "realized_winner_location": "label field only",
     "teacher_probability_in_messages": false,
+    "timestamp_note": "Source game dates are 00:00 UTC date-granularity proxies, not publication or tipoff timestamps.",
     "warning": "The inputs remain narrow. Outcome training can learn Elo and venue corrections, but richer forecasting requires more point-in-time pregame evidence."
   },
-  "built_at": "2026-07-15T19:11:18.211976+00:00",
+  "built_at": "2026-07-15T19:33:04.814590+00:00",
   "objective": {
     "augmented_fit_label_counts": {
       "opponent_wins": 48618,
@@ -29,16 +31,27 @@
     },
     "teacher_forecast_role": "stored baseline metadata; never an outcome training label"
   },
-  "outcome_input_schema_version": 1,
+  "outcome_input_schema_version": 2,
   "outputs": {
-    "nba_development_answers.jsonl": "297cfefe9537e777a3b7c22901b1778fe5da247e9fa8ca64ee87b5d74b8c9380",
-    "nba_development_prompts.jsonl": "72cb7dd8ec8d390053277af3c7b991d48403ee075b566c64c24f828f6b059341",
+    "nba_development_answers.jsonl": "91630b1f96e76ebfad5088f2152510d862e056b29098aa67d5bdaa7f6d6bb6ab",
+    "nba_development_prompts.jsonl": "5f952cc8330623d6435172f4c40a60ee421dc18c2e0364f05af0b9df5b73b772",
     "nba_train_outcome.jsonl": "8572d81dbda7c85cc79390b2b94fb8fcf71cd06f8e1c7f80589c9ea929cfdf78"
   },
   "schema_version": 1,
   "side_swap": {
+    "adjacent_original_swap_pairs": true,
+    "development_prompt_audit": {
+      "duplicate_prompt_rows": 2,
+      "rows": 5224,
+      "unique_prompts": 5222
+    },
     "each_original_has_one_swap": true,
     "enabled": true,
+    "fit_prompt_audit": {
+      "duplicate_prompt_rows": 216,
+      "rows": 97236,
+      "unique_prompts": 97020
+    },
     "swapped_fields": [
       "prior",
       "venue",
@@ -53,13 +66,30 @@
     "training_sha256": "b4d4e079773e859b86070e64054cc011a5d96d5adbb74a5431a51b5fecd913ec"
   },
   "split": {
-    "development_original_rows": 2620,
-    "development_rows_after_side_swap": 5240,
+    "development_original_rows": 2612,
+    "development_original_rows_before_overlap_filter": 2619,
+    "development_pair_orbits_removed_for_fit_overlap": 7,
+    "development_rows_after_side_swap": 5224,
     "development_start": "2007-07-01T00:00:00+00:00",
+    "excluded_cases": {
+      "nba-3d0aec4ec13259d1": "completion of a protested game that began on an earlier date"
+    },
+    "excluded_source_rows": 1,
     "fit_original_rows": 48618,
     "fit_rows_after_side_swap": 97236,
-    "later_validation_opened": false,
+    "historical_holdout_note": "Legacy validation/test answers and aggregate metrics exist locally, but outcome v1 does not read or select on them. A future prospective cohort is required for a truly unseen claim.",
+    "later_answer_files_read_by_outcome_builder": false,
+    "legacy_validation_or_test_used_for_outcome_training": false,
     "method": "chronological cutoff inside the legacy pre-2010 training split",
-    "permanent_test_opened": false
+    "removed_development_question_ids": [
+      "nba-0047cf57f00d01df",
+      "nba-0f66d602b1ab6f80",
+      "nba-44c62e3a8d206412",
+      "nba-51614cb13a4e0a5d",
+      "nba-575d426f1c63f8d7",
+      "nba-cb3d9d649e3d8939",
+      "nba-fabddcff33c021c4"
+    ],
+    "source_rows": 51238
   }
 }

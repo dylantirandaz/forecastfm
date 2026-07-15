@@ -97,7 +97,6 @@ def main() -> None:
             "development_rows_after_side_swap": len(development) * 2,
             "development_pair_orbits_removed_for_fit_overlap": len(removed_development_ids),
             "removed_development_question_ids": list(removed_development_ids),
-            "later_validation_opened": False,
             "later_answer_files_read_by_outcome_builder": False,
             "legacy_validation_or_test_used_for_outcome_training": False,
             "historical_holdout_note": (
@@ -137,6 +136,10 @@ def main() -> None:
             "teacher_probability_in_messages": False,
             "postgame_fields_in_messages": False,
             "augmented_fit_development_prompt_overlap": 0,
+            "timestamp_note": (
+                "Source game dates are 00:00 UTC date-granularity proxies, not publication "
+                "or tipoff timestamps."
+            ),
             "model_sees": ["anonymous question", "neutral Elo prior", "venue"],
             "warning": (
                 "The inputs remain narrow. Outcome training can learn Elo and venue corrections, "

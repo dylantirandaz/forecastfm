@@ -31,6 +31,7 @@ OUTCOME_LOCKED_CODE_PATHS = (
     Path("src/forecastfm/nba_data.py"),
     Path("src/forecastfm/outcome.py"),
     Path("src/forecastfm/outcome_config.py"),
+    Path("src/forecastfm/run_config.py"),
     Path("src/forecastfm/tinker_data.py"),
 )
 

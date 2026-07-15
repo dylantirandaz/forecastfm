@@ -99,10 +99,13 @@ class OutcomeDataset(SupervisedDataset):
         self._pair_order = list(range(len(self._records) // 2))
         Random(seed).shuffle(self._pair_order)
 
-    def validate(self) -> None:
-        """Render every prompt locally before a remote client can be created."""
-        for record in self._records:
-            self._prompt(record)
+    def validate_steps(self, max_steps: int) -> None:
+        """Render the exact deterministic batches selected for the paid run."""
+        if max_steps <= 0:
+            raise RuntimeError("outcome max steps must be positive")
+        self.set_epoch(0)
+        for index in range(min(max_steps, len(self))):
+            self.get_batch(index)
 
     def _validate_pairs(self) -> None:
         seen_ids: set[str] = set()
@@ -222,7 +225,7 @@ def require_prerequisites() -> None:
     dataset = OutcomeDataset(records, renderer, token_ids, BATCH_SIZE, MAX_LENGTH)
     if len(dataset) == 0:
         raise RuntimeError("Outcome training data does not contain one complete batch")
-    dataset.validate()
+    dataset.validate_steps(MAX_STEPS)
     if not os.environ.get("TINKER_API_KEY"):
         raise RuntimeError('TINKER_API_KEY is not set. Run: export TINKER_API_KEY="your-key"')
 
@@ -257,6 +260,7 @@ def build_config() -> train.Config:
 
 def main() -> None:
     """Validate every local input, then start the billable outcome run."""
+    print("Validating outcome data, paired batches, tokenizer, and immutable lock locally.")
     require_prerequisites()
     config = build_config()
     print(f"Training {BASE_MODEL} for {MAX_STEPS} steps on realized winners from {DATA_PATH.name}.")

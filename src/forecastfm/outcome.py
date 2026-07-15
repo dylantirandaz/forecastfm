@@ -6,7 +6,7 @@ from typing import Protocol
 from forecastfm.models import Distribution, ForecastCase, ForecastPrediction, TrainingExample
 from forecastfm.prompting import ChatMessage, render_case
 
-OUTCOME_INPUT_SCHEMA_VERSION = 1
+OUTCOME_INPUT_SCHEMA_VERSION = 2
 
 TEAM_OUTCOME = "team_wins"
 OPPONENT_OUTCOME = "opponent_wins"
