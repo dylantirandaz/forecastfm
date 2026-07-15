@@ -22,12 +22,12 @@ from forecastfm.outcome import (
     TEAM_LABEL,
     TEAM_OUTCOME,
 )
+from forecastfm.prompting import render_case
 from forecastfm.serialization import read_jsonl, write_jsonl
 from forecastfm.tinker_data import (
     write_outcome_forecast_jsonl,
     write_outcome_training_jsonl,
 )
-from forecastfm.prompting import render_case
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_MANIFEST_PATH = PROJECT_ROOT / "data" / "processed" / "manifest.json"
@@ -40,17 +40,30 @@ DEVELOPMENT_PROMPTS_PATH = OUTPUT_DIRECTORY / "nba_development_prompts.jsonl"
 MANIFEST_PATH = OUTPUT_DIRECTORY / "manifest.json"
 
 DEVELOPMENT_START = datetime(2007, 7, 1, tzinfo=UTC)
+OUTCOME_EXCLUDED_CASES = {
+    "nba-3d0aec4ec13259d1": "completion of a protested game that began on an earlier date",
+}
 
 
 def main() -> None:
     """Create a pre-2010 fit/development split without opening later splits."""
     _verify_source_training_file()
-    examples = read_jsonl(SOURCE_TRAIN_PATH)
+    source_examples = read_jsonl(SOURCE_TRAIN_PATH)
+    examples = tuple(
+        example
+        for example in source_examples
+        if example.case.question.question_id not in OUTCOME_EXCLUDED_CASES
+    )
+    excluded_count = len(source_examples) - len(examples)
+    if excluded_count != len(OUTCOME_EXCLUDED_CASES):
+        raise RuntimeError("outcome case exclusions do not match the pinned source")
     fit, unfiltered_development = _chronological_split(examples)
-    development, removed_development_ids = _remove_fit_prompt_overlaps(
+    development, removed_development_ids = remove_fit_prompt_overlaps(
         fit,
         unfiltered_development,
     )
+    fit_prompt_audit = _augmented_prompt_audit(fit)
+    development_prompt_audit = _augmented_prompt_audit(development)
 
     OUTPUT_DIRECTORY.mkdir(parents=True, exist_ok=True)
     write_outcome_training_jsonl(_side_swap_pairs(fit), TRAIN_PATH)
@@ -73,6 +86,9 @@ def main() -> None:
         },
         "split": {
             "method": "chronological cutoff inside the legacy pre-2010 training split",
+            "source_rows": len(source_examples),
+            "excluded_source_rows": excluded_count,
+            "excluded_cases": OUTCOME_EXCLUDED_CASES,
             "development_start": DEVELOPMENT_START.isoformat(),
             "fit_original_rows": len(fit),
             "fit_rows_after_side_swap": len(fit) * 2,
@@ -82,7 +98,13 @@ def main() -> None:
             "development_pair_orbits_removed_for_fit_overlap": len(removed_development_ids),
             "removed_development_question_ids": list(removed_development_ids),
             "later_validation_opened": False,
-            "permanent_test_opened": False,
+            "later_answer_files_read_by_outcome_builder": False,
+            "legacy_validation_or_test_used_for_outcome_training": False,
+            "historical_holdout_note": (
+                "Legacy validation/test answers and aggregate metrics exist locally, but outcome "
+                "v1 does not read or select on them. A future prospective cohort is required for "
+                "a truly unseen claim."
+            ),
         },
         "objective": {
             "loss": "cross-entropy on the realized winner label",
@@ -105,6 +127,8 @@ def main() -> None:
             "enabled": True,
             "each_original_has_one_swap": True,
             "adjacent_original_swap_pairs": True,
+            "fit_prompt_audit": fit_prompt_audit,
+            "development_prompt_audit": development_prompt_audit,
             "swapped_fields": ["prior", "venue", "teacher probability", "realized winner"],
         },
         "anti_cheating": {
@@ -171,10 +195,11 @@ def _side_swap_pairs(examples: Iterable[TrainingExample]) -> Iterable[TrainingEx
         yield side_swap_nba_example(example)
 
 
-def _remove_fit_prompt_overlaps(
+def remove_fit_prompt_overlaps(
     fit: tuple[TrainingExample, ...],
     development: tuple[TrainingExample, ...],
 ) -> tuple[tuple[TrainingExample, ...], tuple[str, ...]]:
+    """Drop development orbits matching either orientation of a fit prompt."""
     fit_hashes = {
         _prompt_hash(example)
         for original in fit
@@ -200,6 +225,19 @@ def _remove_fit_prompt_overlaps(
 
 def _prompt_hash(example: TrainingExample) -> str:
     return sha256(render_case(example.case).encode()).hexdigest()
+
+
+def _augmented_prompt_audit(examples: tuple[TrainingExample, ...]) -> dict[str, int]:
+    hashes = [
+        _prompt_hash(example)
+        for original in examples
+        for example in (original, side_swap_nba_example(original))
+    ]
+    return {
+        "rows": len(hashes),
+        "unique_prompts": len(set(hashes)),
+        "duplicate_prompt_rows": len(hashes) - len(set(hashes)),
+    }
 
 
 def _require_outcome(example: TrainingExample) -> str:

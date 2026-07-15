@@ -50,8 +50,9 @@ requires a protected remote or external timestamp receipt published before the e
 - Run 32, 128, 512, and 2,048-step checkpoints only after freezing each paid protocol.
 
 Local implementation is not a forecasting result. Advancement requires improved chronological
-development log loss and Brier score, acceptable calibration, and side-swap consistency. The
-permanent test remains sealed until the recipe and checkpoint-selection rule are frozen.
+development log loss and Brier score, acceptable calibration, and side-swap consistency. Legacy
+holdout answers already exist locally, so a new prospective cohort is required for a truly unseen
+final claim.
 
 ## 5. General forecasting domains
 

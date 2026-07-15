@@ -128,7 +128,7 @@ def test_augmented_development_prompt_collision_is_removed() -> None:
         ),
     )
 
-    kept, removed_ids = build_outcome_dataset._remove_fit_prompt_overlaps(
+    kept, removed_ids = build_outcome_dataset.remove_fit_prompt_overlaps(
         (fit,),
         (collision,),
     )

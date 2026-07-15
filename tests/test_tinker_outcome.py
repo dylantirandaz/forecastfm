@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from dataclasses import replace
 from math import log
 from pathlib import Path
 from typing import cast
@@ -76,13 +77,34 @@ def _fake_get_tokenizer(_path: str) -> FakeTokenCodec:
     return FakeTokenCodec()
 
 
+def _fake_get_renderer(
+    _renderer_name: str,
+    _tokenizer: object,
+    *,
+    model_name: str | None = None,
+) -> renderers.Renderer:
+    assert model_name is not None
+    return _renderer()
+
+
 def _configure_prerequisites(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     data_path = tmp_path / "nba_train_outcome.jsonl"
+    pairs = []
+    for index in range(train_tinker_outcome_sft.BATCH_SIZE // 2):
+        template = make_nba_training_example()
+        original = replace(
+            template,
+            case=replace(
+                template.case,
+                question=replace(template.case.question, question_id=f"nba-example-{index}"),
+            ),
+        )
+        pairs.extend((original, side_swap_nba_example(original)))
     write_outcome_training_jsonl(
-        (make_nba_training_example(),) * train_tinker_outcome_sft.BATCH_SIZE,
+        pairs,
         data_path,
     )
     manifest_path = tmp_path / "manifest.json"
@@ -104,6 +126,7 @@ def _configure_prerequisites(
         lambda: Path("/pinned/tokenizer"),
     )
     monkeypatch.setattr(train_tinker_outcome_sft, "get_tokenizer", _fake_get_tokenizer)
+    monkeypatch.setattr(train_tinker_outcome_sft.renderers, "get_renderer", _fake_get_renderer)
     monkeypatch.setenv("TINKER_API_KEY", "test-key")
 
 

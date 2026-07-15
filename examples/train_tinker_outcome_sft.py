@@ -99,10 +99,20 @@ class OutcomeDataset(SupervisedDataset):
         self._pair_order = list(range(len(self._records) // 2))
         Random(seed).shuffle(self._pair_order)
 
+    def validate(self) -> None:
+        """Render every prompt locally before a remote client can be created."""
+        for record in self._records:
+            self._prompt(record)
+
     def _validate_pairs(self) -> None:
+        seen_ids: set[str] = set()
         for index in range(0, len(self._records), 2):
             original = self._records[index]
             swapped = self._records[index + 1]
+            pair_ids = {original["question_id"], swapped["question_id"]}
+            if seen_ids & pair_ids:
+                raise RuntimeError("outcome dataset contains duplicate question IDs")
+            seen_ids.update(pair_ids)
             expected_swapped_id = f"{original['question_id']}{SIDE_SWAP_SUFFIX}"
             if swapped["question_id"] != expected_swapped_id:
                 raise RuntimeError("outcome records are not adjacent side-swap pairs")
@@ -110,20 +120,11 @@ class OutcomeDataset(SupervisedDataset):
                 raise RuntimeError("outcome side-swap pair must have opposite labels")
 
     def _datum(self, record: OutcomeTrainingRecord) -> tinker.Datum:
-        messages = [
-            renderers.Message(role=message["role"], content=message["content"])
-            for message in record["messages"]
-        ]
-        prompt = self._renderer.build_generation_prompt(messages)
-        if prompt.length + 1 > self._max_length:
-            raise RuntimeError(f"outcome prompt exceeds max length: {record['question_id']}")
-
+        prompt = self._prompt(record)
         team_token, opponent_token = self._label_token_ids
         label_tokens = {TEAM_LABEL: team_token, OPPONENT_LABEL: opponent_token}
         label_token = label_tokens[record["label"]]
         prompt_tokens = prompt.to_ints()
-        if not prompt_tokens:
-            raise RuntimeError("outcome renderer produced an empty prompt")
         target_tokens = [*prompt_tokens[1:], label_token]
         weights = [0.0] * (len(target_tokens) - 1) + [1.0]
         return tinker.Datum(
@@ -141,6 +142,18 @@ class OutcomeDataset(SupervisedDataset):
                 ),
             },
         )
+
+    def _prompt(self, record: OutcomeTrainingRecord) -> tinker.ModelInput:
+        messages = [
+            renderers.Message(role=message["role"], content=message["content"])
+            for message in record["messages"]
+        ]
+        prompt = self._renderer.build_generation_prompt(messages)
+        if prompt.length + 1 > self._max_length:
+            raise RuntimeError(f"outcome prompt exceeds max length: {record['question_id']}")
+        if not prompt.to_ints():
+            raise RuntimeError("outcome renderer produced an empty prompt")
+        return prompt
 
 
 @chz.chz
@@ -199,10 +212,17 @@ def require_prerequisites() -> None:
     if LOG_PATH.exists():
         raise FileExistsError(f"outcome training log already exists: {LOG_PATH}")
     records = read_outcome_training_jsonl(DATA_PATH)
-    if len(records) < BATCH_SIZE:
-        raise RuntimeError("Outcome training data does not contain one complete batch")
     tokenizer = get_tokenizer(str(require_tokenizer_snapshot()))
-    require_label_token_ids(cast(TokenCodec, tokenizer))
+    token_ids = require_label_token_ids(cast(TokenCodec, tokenizer))
+    renderer = renderers.get_renderer(
+        OUTCOME_RENDERER_NAME,
+        tokenizer,
+        model_name=BASE_MODEL,
+    )
+    dataset = OutcomeDataset(records, renderer, token_ids, BATCH_SIZE, MAX_LENGTH)
+    if len(dataset) == 0:
+        raise RuntimeError("Outcome training data does not contain one complete batch")
+    dataset.validate()
     if not os.environ.get("TINKER_API_KEY"):
         raise RuntimeError('TINKER_API_KEY is not set. Run: export TINKER_API_KEY="your-key"')
 
