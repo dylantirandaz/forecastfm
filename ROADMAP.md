@@ -85,9 +85,10 @@ but 2013 was inconclusive and 2015 was negative. The failure is preserved in
 `data/processed/outcome_v2/manifest.json`; it must not be tuned away using those opened seasons.
 
 An answer-free protocol for the rights-clean 2015–2022 FiveThirtyEight checking-our-work release
-is frozen under `evaluation/outcome_v2_open_modern/`. Its 2021 and 2022 seasons must remain unopened
-until that protocol is committed and pushed. This partial lane does not substitute for licensed
-lineups, injuries, exact timestamps, or prospective evaluation.
+is frozen under `evaluation/outcome_v2_open_modern/` and was pushed before source access. One 2022
+label was subsequently exposed during a schema check; the incident is preserved alongside the
+protocol. Treat this lane as a protocol-frozen historical holdout, not an untouched test. It does
+not substitute for licensed lineups, injuries, exact timestamps, or prospective evaluation.
 
 ## 6. Sequential evidence RL — gated
 
