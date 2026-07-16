@@ -154,6 +154,64 @@ Tinker's prompt-log-probability API, renormalizes those two scores, and averages
 the complemented side-swapped forecast. The unnormalized valid-label mass is retained as a
 diagnostic so renormalization cannot hide probability assigned to unrelated tokens.
 
+### Frozen full development comparison
+
+The outcome-v1 comparison uses all 2,612 original development games and their 2,612 deterministic
+side swaps. Base and adapter each make four candidate-token calls per game, for 20,896 expected
+logical calls in total. Only one model-game arm is active at a time; its four candidate calls all
+finish before the next arm starts. Tinker's transport may still retransmit the same logical request
+with the same session and sequence ID.
+
+The lifecycle is intentionally staged and immutable:
+
+```bash
+# 1. Publish the tested protocol code.
+git add README.md examples src tests
+git commit -m "Add frozen outcome development evaluation"
+git push origin main
+
+# 2. Billable safety gate: four non-development calls per model, eight total.
+uv run --extra tinker python -m examples.smoke_tinker_outcome_candidates
+
+# 3. Freeze and publish prompts, manifest, scoring policy, and one attempt commitment.
+uv run --extra tinker python examples/build_outcome_development_evaluation.py
+git add evaluation/outcome_v1/steps_32
+git commit -m "Freeze outcome development evaluation"
+git push origin main
+
+# 4. Billable: run or safely resume base-versus-adapter candidate scoring.
+uv run --extra tinker python -m examples.run_tinker_outcome_development
+git add evaluation/outcome_v1/steps_32/raw
+git commit -m "Seal outcome development raw results"
+git push origin main
+
+# 5. Only after raw outputs are sealed and published, open answers and score.
+uv run --extra tinker python -m examples.score_outcome_development
+git add evaluation/outcome_v1/steps_32/scores.json
+git commit -m "Score outcome development evaluation"
+git push origin main
+```
+
+The runner never constructs or reads the answer path. Every arm is journaled before its provider
+calls, application retries are disabled, interrupted arms become terminal failures, and failed
+rows receive the precommitted worst-case realized-outcome probability rather than being removed.
+After journaling any terminal arm failure, the runner stops for inspection. A later invocation
+skips that failed arm and continues with the next unattempted arm; it never retries the failure.
+Raw prompt tokens, label log-probabilities, valid-label mass, side-swap diagnostics, failures, and
+the durable journal are sealed together. Scoring first proves those exact files are on
+`origin/main`; only then does it hash and open the answer file.
+
+An advisory process lock prevents two local runners from overlapping. The adapter has a permanent
+Tinker sampler path, but Tinker does not expose a digest for the catalog base weights; a resume that
+creates a new base sampling session therefore cannot cryptographically prove the upstream base
+snapshot stayed identical. Tinker also supplies no signed provider-call receipt, so a local attempt
+can be suppressed before its raw journal is published. These residual limitations are retained
+with the evaluation report.
+
+This blocks accidental and code-path leakage, but it cannot prove that a person or a separate
+program never inspected plaintext answers already present on the local machine. The results are
+historical development diagnostics and remain contamination-prone, not prospective evidence.
+
 ## Legacy paired validation canary
 
 The next gate is a frozen 64-game validation canary. Selection uses only the lexicographically
@@ -220,6 +278,9 @@ is not used by this workflow.
 - `run_config.py`: explicit model, tokenizer, training, and decoding settings.
 - `outcome.py`: fixed labels, outcome prompts, stable normalization, and symmetry averaging.
 - `outcome_config.py`: readable outcome-v1 canary and scaling settings.
+- `outcome_evaluation.py`: immutable full-cohort manifests, raw records, and seals.
+- `outcome_metrics.py`: proper outcome scores, calibration, paired intervals, and difficulty bins.
+- `publication.py`: exact local-versus-published Git gates for frozen evaluations.
 - `run_lock.py`: immutable training and trained-sampler experiment locks.
 - `ledger.py`: prospective cohort validation and append-only hash-chain verification.
 - `canary.py`: frozen validation call plans, generation records, seals, and answer-free metrics.
