@@ -435,6 +435,29 @@
     }
   },
   "features": {
+    "full_schema": {
+      "current_artifact_contains_full_schema": false,
+      "local_health_names": [
+        "unavailable_rotation_minutes",
+        "unavailable_rotation_value"
+      ],
+      "missing_policy": "Reject a game with any missing required source value; use a stated default only for a genuine no-history state.",
+      "sha256": "016bfad21e28389486aa9545ae2aba372e247f8682e915d13cdfd377f35fc9a8",
+      "standard_names": [
+        "rest_days",
+        "back_to_back",
+        "games_last_7",
+        "road_games_last_7",
+        "travel_miles",
+        "travel_time_zones",
+        "roster_continuity",
+        "expected_lineup_continuity",
+        "rolling_team_net_rating",
+        "rolling_rotation_value",
+        "schedule_strength"
+      ],
+      "version": 1
+    },
     "limitations": [
       "Game times have date granularity, not true publication or tipoff timestamps.",
       "Road-game counts are a travel proxy; the source has no arena, mileage, or time zone.",

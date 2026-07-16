@@ -15,8 +15,8 @@ from forecastfm.json_utils import (
 )
 from forecastfm.models import Distribution
 from forecastfm.nba_data import SOURCE_SHA256
-from forecastfm.nba_v2 import NbaV2Example, NbaV2Features, side_swap_nba_v2_example
 from forecastfm.nba_rich import NBA_RICH_SCHEMA_SHA256, NBA_RICH_SCHEMA_VERSION
+from forecastfm.nba_v2 import NbaV2Example, NbaV2Features, side_swap_nba_v2_example
 from forecastfm.outcome import OUTCOME_INPUT_SCHEMA_VERSION
 from tests.helpers import make_nba_training_example
 
