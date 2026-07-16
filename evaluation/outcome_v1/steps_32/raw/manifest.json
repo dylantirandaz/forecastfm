@@ -1,0 +1,16 @@
+{
+  "adapter_completed": 2605,
+  "adapter_sha256": "71a96ce961d6016da754096d3a8752b47abf6d5abe8b7ac385f7ae0c393b8e2c",
+  "attempt_sha256": "c83bcbc89c93ce6093d39054dbc7a521c352252264d43bc074a8287cc17a4ec2",
+  "base_completed": 2612,
+  "base_sha256": "d5fc3d5c467179bae4af0d02b4fd364ac72f0031a18c019676d1a8f80142fa67",
+  "created_at": "2026-07-16T17:10:48.728003+00:00",
+  "game_count": 2612,
+  "journal_sha256": "cc3dca30b75e217c4efc050b30378aa30a33ecf075d8961e66158b944b163502",
+  "kind": "forecastfm_outcome_evaluation_seal",
+  "manifest_sha256": "b061cfd25760488b0f09c168a2d266ab2705eed926201efcd6aa9be78e76f714",
+  "prompts_sha256": "5f952cc8330623d6435172f4c40a60ee421dc18c2e0364f05af0b9df5b73b772",
+  "question_ids_sha256": "d2e8225a8614e5744b358d439843eaab8076cc8358a1b8aed38822acf7a1ecf8",
+  "schema_version": 1,
+  "status": "sealed_before_answer_access"
+}
