@@ -119,6 +119,8 @@ class SourceSnapshot:
     capture_method: CaptureMethod
     sensitivity: Sensitivity
     rights: SourceRights
+    archive_version_id: str | None = None
+    archive_attestation_sha256: str | None = None
 
     def __post_init__(self) -> None:
         _require_text(self.source_id, "source_id")
@@ -132,6 +134,15 @@ class SourceSnapshot:
             raise NbaEvidenceError("unsupported capture_method")
         if self.sensitivity not in _SENSITIVITIES:
             raise NbaEvidenceError("unsupported source sensitivity")
+        if self.capture_method == "provider_versioned_archive":
+            if self.archive_version_id is None:
+                raise NbaEvidenceError("provider archives require an immutable version ID")
+            _require_text(self.archive_version_id, "archive_version_id")
+            if self.archive_attestation_sha256 is None:
+                raise NbaEvidenceError("provider archives require an attestation digest")
+            _require_sha256(self.archive_attestation_sha256, "archive_attestation_sha256")
+        elif self.archive_version_id is not None or self.archive_attestation_sha256 is not None:
+            raise NbaEvidenceError("live captures cannot carry provider archive attestations")
 
     def historical_available_at(self) -> datetime:
         """Return when this snapshot could first support a point-in-time feature."""
@@ -178,6 +189,18 @@ class NbaEvidenceRecord:
             return 0.0
         return difference
 
+    def side_swap(self) -> NbaEvidenceRecord:
+        """Exchange team and opponent values without changing source lineage."""
+        return NbaEvidenceRecord(
+            record_id=self.record_id,
+            kind=self.kind,
+            feature_name=self.feature_name,
+            team_value=self.opponent_value,
+            opponent_value=self.team_value,
+            source_ids=self.source_ids,
+            available_at=self.available_at,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class NbaEvidenceBundle:
@@ -222,18 +245,7 @@ def tinker_evidence_cards(
     action_at: datetime,
 ) -> tuple[EvidenceCard, ...]:
     """Build standard Tinker inputs after rights and health-lineage checks."""
-    _require_permission(bundle, "third_party_processing", action_at)
-    _require_permission(bundle, "tinker_processing", action_at)
-    if any(source.sensitivity == "player_health" for source in bundle.sources):
-        raise NbaEvidenceError("standard Tinker exports cannot contain player-health lineage")
-    require_text_health_screen_passes(
-        text
-        for record in bundle.records
-        for text in (
-            record.feature_name.replace("_", " "),
-            *(_source_urls(record, bundle.sources)),
-        )
-    )
+    _require_tinker_processing(bundle, action_at)
     return _evidence_cards(bundle)
 
 
@@ -259,12 +271,19 @@ def evidence_bundle_sha256(bundle: NbaEvidenceBundle) -> str:
             "game": {
                 "question_id": bundle.game.question_id,
                 "source_game_id": bundle.game.source_game_id,
+                "matchup": bundle.game.matchup,
+                "outcomes": list(bundle.game.outcomes),
                 "forecast_deadline": _utc_text(bundle.game.forecast_deadline),
                 "scheduled_tipoff": _utc_text(bundle.game.scheduled_tipoff),
             },
             "question": {
                 "question_id": bundle.question.question_id,
+                "text": bundle.question.text,
+                "resolution_rule": bundle.question.resolution_rule,
+                "resolution_source": bundle.question.resolution_source,
+                "outcomes": list(bundle.question.outcomes),
                 "forecast_at": _utc_text(bundle.question.forecast_at),
+                "resolves_at": _utc_text(bundle.question.resolves_at),
             },
             "sources": [_source_payload(source) for source in bundle.sources],
             "records": [
@@ -283,20 +302,36 @@ def evidence_bundle_sha256(bundle: NbaEvidenceBundle) -> str:
     )
 
 
-def numeric_feature_differences(bundle: NbaEvidenceBundle) -> tuple[tuple[str, float], ...]:
-    """Return stable team-minus-opponent features for a tabular model."""
-    return tuple(sorted((record.feature_name, record.difference) for record in bundle.records))
+def local_numeric_feature_vector(
+    bundle: NbaEvidenceBundle,
+    feature_names: tuple[str, ...],
+    *,
+    action_at: datetime,
+) -> tuple[float, ...]:
+    """Build an aligned local-model vector after checking source rights."""
+    _require_permission(bundle, "local_processing", action_at)
+    return _numeric_feature_vector(bundle, feature_names)
 
 
-def numeric_feature_vector(
+def tinker_numeric_feature_vector(
+    bundle: NbaEvidenceBundle,
+    feature_names: tuple[str, ...],
+    *,
+    action_at: datetime,
+) -> tuple[float, ...]:
+    """Build an aligned Tinker vector after rights and health checks."""
+    _require_tinker_processing(bundle, action_at)
+    return _numeric_feature_vector(bundle, feature_names)
+
+
+def _numeric_feature_vector(
     bundle: NbaEvidenceBundle,
     feature_names: tuple[str, ...],
 ) -> tuple[float, ...]:
-    """Align one bundle to an exact, predeclared tabular feature schema."""
     valid_names = all(_FEATURE_NAME_PATTERN.fullmatch(name) is not None for name in feature_names)
     if not valid_names or len(set(feature_names)) != len(feature_names):
         raise NbaEvidenceError("feature schema names must be valid and unique")
-    values = dict(numeric_feature_differences(bundle))
+    values = {record.feature_name: record.difference for record in bundle.records}
     if set(values) != set(feature_names):
         raise NbaEvidenceError("evidence features do not match the predeclared schema")
     return tuple(values[name] for name in feature_names)
@@ -306,10 +341,15 @@ def _validate_bindings(bundle: NbaEvidenceBundle) -> None:
     question = bundle.question
     game = bundle.game
     _require_utc(question.forecast_at, "question.forecast_at")
+    _require_utc(question.resolves_at, "question.resolves_at")
     if question.question_id != game.question_id:
         raise NbaEvidenceError("question and cohort game IDs must match")
+    if question.outcomes != game.outcomes:
+        raise NbaEvidenceError("question and cohort game outcomes must match")
     if question.forecast_at != game.forecast_deadline:
         raise NbaEvidenceError("question cutoff must equal the cohort forecast deadline")
+    if question.resolves_at < game.scheduled_tipoff:
+        raise NbaEvidenceError("question resolution cannot precede scheduled tipoff")
     if not bundle.sources:
         raise NbaEvidenceError("an evidence bundle must contain at least one source")
     if not bundle.records:
@@ -376,6 +416,8 @@ def _require_permission(
     action_at: datetime,
 ) -> None:
     _require_utc(action_at, "action_at")
+    if any(record.available_at > action_at for record in bundle.records):
+        raise NbaEvidenceError("evidence availability cannot be after the protected action")
     for source in bundle.sources:
         if source.rights.rights_as_of > action_at:
             raise NbaEvidenceError("rights_as_of cannot be after the protected action")
@@ -386,6 +428,18 @@ def _require_permission(
             raise NbaEvidenceError(
                 f"{field_name} must be explicitly allowed for source {source.source_id}"
             )
+
+
+def _require_tinker_processing(bundle: NbaEvidenceBundle, action_at: datetime) -> None:
+    _require_permission(bundle, "third_party_processing", action_at)
+    _require_permission(bundle, "tinker_processing", action_at)
+    if any(source.sensitivity == "player_health" for source in bundle.sources):
+        raise NbaEvidenceError("standard Tinker exports cannot contain player-health lineage")
+    require_text_health_screen_passes(
+        text
+        for record in bundle.records
+        for text in (record.feature_name, *(_source_urls(record, bundle.sources)))
+    )
 
 
 def _permission(rights: SourceRights, field_name: PermissionField) -> Permission:
@@ -429,6 +483,8 @@ def _source_payload(source: SourceSnapshot) -> dict[str, object]:
         "retrieved_at": _utc_text(source.retrieved_at),
         "capture_method": source.capture_method,
         "sensitivity": source.sensitivity,
+        "archive_version_id": source.archive_version_id,
+        "archive_attestation_sha256": source.archive_attestation_sha256,
         "rights": {
             "license_name": rights.license_name,
             "terms_url": rights.terms_url,

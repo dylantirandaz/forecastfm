@@ -31,7 +31,9 @@ A live snapshot is eligible for a prospective claim only when it was retrieved b
 forecast deadline. A provider archive may support retrospective model development, but it is not
 prospective proof. Before using an archive for a leakage-sensitive backtest, retain the exact
 provider version identifier, publication timestamp, raw payload hash, and the vendor's written
-description of revision and backfill behavior.
+description of revision and backfill behavior. Archive snapshots are accepted only with an
+immutable provider version ID and a hash of that attestation; they still cannot support a
+prospective claim.
 
 `nba_evidence.py` keeps raw rows outside model-facing files and binds each numeric feature to its
 source hash, timestamps, rights decision, and sensitivity. Standard Tinker conversion requires

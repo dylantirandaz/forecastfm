@@ -16,6 +16,7 @@ from forecastfm.json_utils import (
 from forecastfm.models import Distribution
 from forecastfm.nba_data import SOURCE_SHA256
 from forecastfm.nba_v2 import NbaV2Example, NbaV2Features, side_swap_nba_v2_example
+from forecastfm.nba_rich import NBA_RICH_SCHEMA_SHA256, NBA_RICH_SCHEMA_VERSION
 from forecastfm.outcome import OUTCOME_INPUT_SCHEMA_VERSION
 from tests.helpers import make_nba_training_example
 
@@ -124,6 +125,9 @@ def test_checked_in_manifest_preserves_the_failed_rl_gate() -> None:
     seasons = require_list(required_field(rich, "seasons"), "seasons")
     season_records = tuple(require_object(value, "season") for value in seasons)
     rl = require_object(required_field(manifest, "rl"), "rl")
+    upload_rights = require_object(required_field(manifest, "upload_rights"), "upload_rights")
+    features = require_object(required_field(manifest, "features"), "features")
+    full_schema = require_object(required_field(features, "full_schema"), "full_schema")
 
     assert required_field(source, "sha256") == SOURCE_SHA256
     assert required_field(manifest, "outcome_input_schema_version") == (
@@ -154,3 +158,9 @@ def test_checked_in_manifest_preserves_the_failed_rl_gate() -> None:
     assert required_field(evaluation, "failed_forecast_realized_probability") == 1e-15
     assert required_field(rl, "ready") is False
     assert required_field(rl, "paid_tinker_job_launched") is False
+    assert required_field(upload_rights, "third_party_processing") == "allowed"
+    assert required_field(upload_rights, "tinker_processing") == "allowed"
+    assert required_field(upload_rights, "player_health_included") is False
+    assert required_field(full_schema, "version") == NBA_RICH_SCHEMA_VERSION
+    assert required_field(full_schema, "sha256") == NBA_RICH_SCHEMA_SHA256
+    assert required_field(full_schema, "current_artifact_contains_full_schema") is False

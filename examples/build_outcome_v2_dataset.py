@@ -26,6 +26,13 @@ from forecastfm.nba_data import (
     download_nba_elo,
     file_sha256,
 )
+from forecastfm.nba_rich import (
+    NBA_LOCAL_HEALTH_FEATURE_NAMES,
+    NBA_RICH_FEATURE_NAMES,
+    NBA_RICH_MISSING_POLICY,
+    NBA_RICH_SCHEMA_SHA256,
+    NBA_RICH_SCHEMA_VERSION,
+)
 from forecastfm.nba_v2 import (
     NBA_V2_DATA_LIMITATIONS,
     NBA_V2_FEATURE_NAMES,
@@ -389,6 +396,13 @@ def _manifest(build: _Build) -> dict[str, object]:
             "license_url": LICENSE_URL,
             "eligible_games": build.source_count,
         },
+        "upload_rights": {
+            "scope": "current FiveThirtyEight CC BY 4.0 source only",
+            "third_party_processing": "allowed",
+            "tinker_processing": "allowed",
+            "player_health_included": False,
+            "future_licensed_sources_must_be_reapproved": True,
+        },
         "features": {
             "names": list(NBA_V2_FEATURE_NAMES),
             "scaling": "training-cohort root mean square without mean centering",
@@ -396,6 +410,14 @@ def _manifest(build: _Build) -> dict[str, object]:
             "season_reset": True,
             "side_swap_antisymmetric": True,
             "limitations": list(NBA_V2_DATA_LIMITATIONS),
+            "full_schema": {
+                "version": NBA_RICH_SCHEMA_VERSION,
+                "sha256": NBA_RICH_SCHEMA_SHA256,
+                "standard_names": list(NBA_RICH_FEATURE_NAMES),
+                "local_health_names": list(NBA_LOCAL_HEALTH_FEATURE_NAMES),
+                "missing_policy": NBA_RICH_MISSING_POLICY,
+                "current_artifact_contains_full_schema": False,
+            },
         },
         "anti_cheating": {
             "target": "realized winner; never an input feature",
@@ -460,6 +482,7 @@ def _manifest(build: _Build) -> dict[str, object]:
                 "licensed point-in-time travel data",
                 "licensed timestamped availability and expected-lineup data",
                 "roster and player-level rolling metrics",
+                "signed source terms explicitly allowing Tinker processing",
                 "at least two prospectively frozen evaluation seasons",
             ],
         },

@@ -70,6 +70,10 @@ final claim.
   forecasts, reject extra or duplicate IDs, and take scoring metadata only from the frozen cohort.
 - Validate licensed evidence as oriented numeric records with source hashes, point-in-time capture,
   rights, and sensitivity lineage before it enters either model path.
+- Align richer records to one exact rest, load, travel, roster, lineup, rolling-team,
+  rolling-player, and schedule-strength feature schema.
+- Refuse outcome-v2 SFT offline unless the full-data, upload-rights, artifact-hash,
+  side-swap-pair, and exact batch-coverage gates all pass.
 
 The current source has date-only timestamps and no true travel, injury, expected-lineup, roster,
 or player-level data. Existing historical answers are contamination-prone. This milestone does not
@@ -79,6 +83,11 @@ result.
 The first historical run failed the conjunction gate: pooled Elo-relative log score was positive,
 but 2013 was inconclusive and 2015 was negative. The failure is preserved in
 `data/processed/outcome_v2/manifest.json`; it must not be tuned away using those opened seasons.
+
+An answer-free protocol for the rights-clean 2015–2022 FiveThirtyEight checking-our-work release
+is frozen under `evaluation/outcome_v2_open_modern/`. Its 2021 and 2022 seasons must remain unopened
+until that protocol is committed and pushed. This partial lane does not substitute for licensed
+lineups, injuries, exact timestamps, or prospective evaluation.
 
 ## 6. Sequential evidence RL — gated
 

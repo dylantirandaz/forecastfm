@@ -31,7 +31,9 @@ def flagged_case_health_terms(case: ForecastCase) -> tuple[str, ...]:
 def flagged_health_terms_in_texts(texts: Iterable[str]) -> tuple[str, ...]:
     """Return known health terms found in arbitrary model-facing text."""
     matches = {
-        match.group(0).lower() for text in texts for match in _BLOCKED_HEALTH_PATTERN.finditer(text)
+        match.group(0).lower()
+        for text in texts
+        for match in _BLOCKED_HEALTH_PATTERN.finditer(text.replace("_", " "))
     }
     return tuple(sorted(matches))
 

@@ -333,8 +333,10 @@ is not used by this workflow.
 - `nba_data.py`: pinned NBA download, leakage-safe transformation, and temporal splits.
 - `nba_v2.py`: prior-date rolling NBA features with exact side-swap symmetry.
 - `nba_evidence.py`: licensed-source rights, timing, lineage, and numeric evidence bundles.
+- `nba_rich.py`: the predeclared richer NBA feature schema and exact side swaps.
 - `elo_residual.py`: dependency-free cross-entropy correction to Elo log-odds.
 - `outcome_v2_metrics.py`: strict per-season Elo-relative scores and block-bootstrap gate.
+- `outcome_v2_preflight.py`: offline full-data, rights, hash, pair, and batch-coverage gate.
 - `serialization.py`: strict, readable JSONL input and output.
 - `prompting.py`: the model prompt and strict prediction parser.
 - `tinker_data.py`: screened SFT conversation export without SDK coupling.

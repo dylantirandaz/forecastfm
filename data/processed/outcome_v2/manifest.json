@@ -20,6 +20,7 @@
       "licensed point-in-time travel data",
       "licensed timestamped availability and expected-lineup data",
       "roster and player-level rolling metrics",
+      "signed source terms explicitly allowing Tinker processing",
       "at least two prospectively frozen evaluation seasons"
     ],
     "full_outcome_v2_ready": false,
@@ -228,6 +229,7 @@
         ]
       }
     },
+    "valid_probability_contract": "strictly between zero and one",
     "validation": {
       "recalibrated_vs_raw_elo": {
         "baseline": "raw_elo",
@@ -430,8 +432,7 @@
           }
         ]
       }
-    },
-    "valid_probability_contract": "strictly between zero and one"
+    }
   },
   "features": {
     "limitations": [
@@ -456,6 +457,7 @@
     "side_swap_antisymmetric": true,
     "state_update": "whole-date batches using strictly earlier game dates"
   },
+  "outcome_input_schema_version": 2,
   "outputs": {
     "nba_historical_test_answers.jsonl": "b8512f5a139532cb437881bd137c5cf73e35ae50832cab2bf368aaa6fa809e7d",
     "nba_historical_test_prompts.jsonl": "cff97766e4a86e4b25e71e213570cb25ebee255f43c373b2e0650057ac97f10c",
@@ -613,5 +615,12 @@
       "learning_rate": 0.1,
       "steps": 1000
     }
+  },
+  "upload_rights": {
+    "future_licensed_sources_must_be_reapproved": true,
+    "player_health_included": false,
+    "scope": "current FiveThirtyEight CC BY 4.0 source only",
+    "third_party_processing": "allowed",
+    "tinker_processing": "allowed"
   }
 }

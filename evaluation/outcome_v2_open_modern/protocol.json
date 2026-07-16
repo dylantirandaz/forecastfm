@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "status": "answer_free_protocol",
+  "source": {
+    "name": "FiveThirtyEight checking-our-work NBA game forecasts",
+    "commit": "f6d5b2e1d6da2889345d381c41431f9a4ee208dd",
+    "url": "https://raw.githubusercontent.com/fivethirtyeight/checking-our-work-data/f6d5b2e1d6da2889345d381c41431f9a4ee208dd/nba_games.csv",
+    "license": "CC BY 4.0",
+    "license_url": "https://github.com/fivethirtyeight/checking-our-work-data/blob/f6d5b2e1d6da2889345d381c41431f9a4ee208dd/LICENSE",
+    "expected_date_range": ["2015-10-27", "2022-06-16"],
+    "downloaded_before_protocol_freeze": false
+  },
+  "lagged_player_source": {
+    "name": "FiveThirtyEight NBA RAPTOR",
+    "commit": "4c1ff5e3aef1816ae04af63218015066e186c147",
+    "tree_url": "https://github.com/fivethirtyeight/data/tree/4c1ff5e3aef1816ae04af63218015066e186c147/nba-raptor",
+    "license": "CC BY 4.0",
+    "license_url": "https://github.com/fivethirtyeight/data/blob/4c1ff5e3aef1816ae04af63218015066e186c147/LICENSE",
+    "allowed_join": "A game may use only a player's aggregate from a fully completed prior season.",
+    "downloaded_before_protocol_freeze": false
+  },
+  "cohort": {
+    "include": "Every row with a unique game identity, two interior pregame probabilities, and a non-tied final score.",
+    "orientation": "Use source team1 as the listed team and create an exact side swap only for model training and symmetry checks.",
+    "same_date_results_visible": false,
+    "future_results_visible": false
+  },
+  "splits": {
+    "train_seasons": [2016, 2017, 2018, 2019],
+    "validation_seasons": [2020],
+    "untouched_test_seasons": [2021, 2022]
+  },
+  "inputs": {
+    "baseline": "The source-published team1 pregame probability; do not relabel it as basic Elo.",
+    "allowed": [
+      "source pregame probability and its log odds",
+      "rest, back-to-back, and seven-day load from strictly earlier scheduled dates",
+      "rolling team results and schedule strength from strictly earlier dates",
+      "completed-prior-season CC-BY RAPTOR aggregates when coverage and joins are audited"
+    ],
+    "forbidden": [
+      "same-date or future game results",
+      "current-game scores or realized winner",
+      "same-season final RAPTOR aggregates",
+      "unlicensed lineups, injuries, box scores, or NBA.com-derived data"
+    ]
+  },
+  "evaluation": {
+    "primary_metric": "mean log loss",
+    "secondary_metrics": ["Brier score", "calibration error", "side-swap consistency"],
+    "baselines": ["raw source probability", "training-only recalibrated source probability"],
+    "season_gate": "Positive baseline-relative log score and positive one-sided 95% seven-day calendar-block bootstrap lower bound in each untouched test season.",
+    "missing_or_malformed_forecast_realized_probability": 1e-15,
+    "exact_cohort_coverage": true
+  },
+  "limitations": [
+    "Dates are not exact tipoff or publication timestamps.",
+    "The source probability is a published FiveThirtyEight forecast, not guaranteed to be basic Elo.",
+    "Historical outcomes may occur in model pretraining, so this remains a contamination-prone diagnostic.",
+    "This open lane does not satisfy the licensed lineup, injury, exact-travel, or prospective-season requirements."
+  ]
+}
