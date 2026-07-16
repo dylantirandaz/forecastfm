@@ -1,0 +1,9 @@
+{
+  "adapter_sampler_path": "tinker://a39a1719-b614-5022-bdb4-6a86d3a2d3a5:train:0/sampler_weights/final",
+  "checkpoint_metadata_sha256": "4307cfa6ca6f0503ea61dfb5b4b0652b4fa81b2dfbe42128f000ca738c088a52",
+  "created_at": "2026-07-16T02:25:26.965663+00:00",
+  "kind": "forecastfm_experiment_lock",
+  "schema_version": 1,
+  "status": "ready_for_prospective_forecasts",
+  "training_lock_sha256": "36a33697d4ffbd1075e0e2682ad1b0862e7e27cdb862fde59dae6977012c464f"
+}

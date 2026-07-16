@@ -4,8 +4,9 @@ import json
 from pathlib import Path
 
 import pytest
-from examples import freeze_experiment, freeze_outcome_experiment
+from examples import freeze_outcome_experiment
 
+from forecastfm.checkpoints import read_final_checkpoint
 from forecastfm.run_lock import verify_experiment_lock
 
 RUN_PREFIX = "tinker://run:train:0"
@@ -31,7 +32,7 @@ def test_read_final_checkpoint_accepts_periodic_records_before_final(tmp_path: P
     path = tmp_path / "checkpoints.jsonl"
     _write_checkpoints(path, _checkpoint("step_16"), _checkpoint("final"))
 
-    record = freeze_experiment.read_final_checkpoint(path)
+    record = read_final_checkpoint(path)
 
     assert record["sampler_path"] == f"{RUN_PREFIX}/sampler_weights/final"
 
@@ -41,7 +42,7 @@ def test_read_final_checkpoint_rejects_a_nonfinal_last_record(tmp_path: Path) ->
     _write_checkpoints(path, _checkpoint("final"), _checkpoint("step_32"))
 
     with pytest.raises(RuntimeError, match="must be the last"):
-        freeze_experiment.read_final_checkpoint(path)
+        read_final_checkpoint(path)
 
 
 def test_read_final_checkpoint_rejects_duplicate_final_records(tmp_path: Path) -> None:
@@ -49,7 +50,7 @@ def test_read_final_checkpoint_rejects_duplicate_final_records(tmp_path: Path) -
     _write_checkpoints(path, _checkpoint("final"), _checkpoint("final"))
 
     with pytest.raises(RuntimeError, match="exactly one"):
-        freeze_experiment.read_final_checkpoint(path)
+        read_final_checkpoint(path)
 
 
 def test_read_final_checkpoint_rejects_mismatched_run_paths(tmp_path: Path) -> None:
@@ -59,7 +60,7 @@ def test_read_final_checkpoint_rejects_mismatched_run_paths(tmp_path: Path) -> N
     _write_checkpoints(path, record)
 
     with pytest.raises(RuntimeError, match="same run"):
-        freeze_experiment.read_final_checkpoint(path)
+        read_final_checkpoint(path)
 
 
 def test_outcome_freezer_binds_the_step_specific_training_lock(

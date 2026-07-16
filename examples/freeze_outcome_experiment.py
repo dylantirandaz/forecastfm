@@ -3,8 +3,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-from examples.freeze_experiment import read_final_checkpoint
-
+from forecastfm.checkpoints import read_final_checkpoint
 from forecastfm.integrity import file_sha256
 from forecastfm.json_utils import require_string, required_field
 from forecastfm.outcome_config import MAX_STEPS, RUN_NAME
