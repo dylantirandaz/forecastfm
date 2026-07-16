@@ -383,6 +383,7 @@ def test_features_and_examples_have_exact_side_swap_involution(tmp_path: Path) -
     assert swapped.training_example.case.prior.probabilities == tuple(
         reversed(original.training_example.case.prior.probabilities)
     )
+    assert "-0.0" not in render_case(swapped.training_example.case)
     assert side_swap_nba_v2_example(swapped) == original
     assert original.features.venue_adjusted_elo_probabilities[0] == pytest.approx(
         _forecast(1_620.0, 1_480.0, "H")

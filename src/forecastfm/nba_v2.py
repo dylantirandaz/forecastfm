@@ -136,15 +136,15 @@ class NbaV2Features:
         team_probability, opponent_probability = self.venue_adjusted_elo_probabilities
         return NbaV2Features(
             venue_adjusted_elo_probabilities=(opponent_probability, team_probability),
-            venue_adjusted_elo_log_odds=-self.venue_adjusted_elo_log_odds,
-            rest_days_difference=-self.rest_days_difference,
-            back_to_back_difference=-self.back_to_back_difference,
-            games_last_7_difference=-self.games_last_7_difference,
-            road_games_last_7_difference=-self.road_games_last_7_difference,
-            trailing_10_win_rate_difference=-self.trailing_10_win_rate_difference,
-            trailing_10_margin_difference=-self.trailing_10_margin_difference,
-            trailing_10_opponent_elo_difference=-self.trailing_10_opponent_elo_difference,
-            trailing_10_history_difference=-self.trailing_10_history_difference,
+            venue_adjusted_elo_log_odds=_negate(self.venue_adjusted_elo_log_odds),
+            rest_days_difference=_negate(self.rest_days_difference),
+            back_to_back_difference=_negate(self.back_to_back_difference),
+            games_last_7_difference=_negate(self.games_last_7_difference),
+            road_games_last_7_difference=_negate(self.road_games_last_7_difference),
+            trailing_10_win_rate_difference=_negate(self.trailing_10_win_rate_difference),
+            trailing_10_margin_difference=_negate(self.trailing_10_margin_difference),
+            trailing_10_opponent_elo_difference=_negate(self.trailing_10_opponent_elo_difference),
+            trailing_10_history_difference=_negate(self.trailing_10_history_difference),
         )
 
 
@@ -510,3 +510,9 @@ def _side_swap_question_id(question_id: str) -> str:
     if question_id.endswith(SIDE_SWAP_SUFFIX):
         return question_id.removesuffix(SIDE_SWAP_SUFFIX)
     return f"{question_id}{SIDE_SWAP_SUFFIX}"
+
+
+def _negate(value: float) -> float:
+    if value == 0.0:
+        return 0.0
+    return -value

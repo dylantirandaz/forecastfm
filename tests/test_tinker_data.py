@@ -52,6 +52,19 @@ def test_sft_export_rejects_health_language() -> None:
         build_sft_record(replace(example, case=unsafe_case))
 
 
+def test_forecast_export_rejects_health_language() -> None:
+    example = make_training_example()
+    unsafe_card = EvidenceCard(
+        text="A player has an injury.",
+        source="test",
+        available_at=example.case.question.forecast_at,
+    )
+    unsafe_case = replace(example.case, evidence=(unsafe_card,))
+
+    with pytest.raises(TinkerScreeningError, match="injury"):
+        build_forecast_record(unsafe_case)
+
+
 def test_sft_export_checks_the_target_method() -> None:
     example = make_training_example()
 

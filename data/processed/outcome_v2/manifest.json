@@ -14,6 +14,8 @@
     "team_identity": "used only inside the feature state machine"
   },
   "evaluation": {
+    "failed_forecast_realized_probability": 1e-15,
+    "failure_handling": "Missing IDs and explicit malformed-output records remain in the denominator at the frozen worst-case realized probability.",
     "full_outcome_v2_missing": [
       "licensed point-in-time travel data",
       "licensed timestamped availability and expected-lineup data",
@@ -428,7 +430,8 @@
           }
         ]
       }
-    }
+    },
+    "valid_probability_contract": "strictly between zero and one"
   },
   "features": {
     "limitations": [
@@ -454,11 +457,11 @@
     "state_update": "whole-date batches using strictly earlier game dates"
   },
   "outputs": {
-    "nba_historical_test_answers.jsonl": "e196523b3bd7b768a5e8d985b31af0e58db0a79b5d1c768b6931a707e82779e4",
-    "nba_historical_test_prompts.jsonl": "a0efa6aaf138e3c35c719e43dfbf17aa4a8ea4cf020f31ec826edf1ac5cf1f7e",
-    "nba_train_outcome.jsonl": "ec6d2daa6ec5301ca18a1d382a473230fae8145958f33202f0f357ad44355ce7",
-    "nba_validation_answers.jsonl": "a603a69b18f7db8f5baace8e87467ca90e1b9c4c22f2285e200b3b99dc02e89d",
-    "nba_validation_prompts.jsonl": "d5312b03baeb1db1614d26ca4e88d31dda6f63e2673eb5730b3a1c537a14afd8"
+    "nba_historical_test_answers.jsonl": "b8512f5a139532cb437881bd137c5cf73e35ae50832cab2bf368aaa6fa809e7d",
+    "nba_historical_test_prompts.jsonl": "cff97766e4a86e4b25e71e213570cb25ebee255f43c373b2e0650057ac97f10c",
+    "nba_train_outcome.jsonl": "bf1b9096b3e6a26c7be5a9b39440721cdddae054a17a295dff70e61bfd9e38d3",
+    "nba_validation_answers.jsonl": "0f91d2be1fbab41ba55c8dd2ec2d93f5a3376c92922a7ec3e07c24250d8db5db",
+    "nba_validation_prompts.jsonl": "1265f2954bb050eae4079bd1fb92d6d6b7ae5adfab5030052f589d6f20708a4c"
   },
   "rl": {
     "gate": "First clear raw and recalibrated Elo on every frozen season, then define real sequential evidence actions, retrieval costs, stopping, and a prospective cohort.",
@@ -478,7 +481,9 @@
   },
   "splits": {
     "historical_test": {
+      "full_cohort_sha256": "564126f5a1c95402eb580dd3f4d24f2c8f84f9ec20dd5ff607ac1d8a1769c543",
       "original_games": 3944,
+      "question_ids_sha256": "8a0199f95e6fd5be3f59787329e6c2128e50905ef3f16ccfeaee0b2ce06097b6",
       "seasons": [
         2013,
         2014,
@@ -486,12 +491,16 @@
       ]
     },
     "train": {
+      "full_cohort_sha256": "f94421c2fc21814b3d3219db92b90dd4438ef1829f72054c41e45029eef9cb71",
       "original_games": 51359,
+      "question_ids_sha256": "5f525b37d1bb13746776cdbaffcb9bfde739adae72cb7bd7324e8cbf2bc119ab",
       "side_swapped_training_rows": 102718,
       "through_season": 2009
     },
     "validation": {
+      "full_cohort_sha256": "09e82390fe4488a07946c8581afc88cbeac37b65d4f27d8c46e4ccd86184d0e9",
       "original_games": 3697,
+      "question_ids_sha256": "f343fe19ca7a776e283ae8da8c123d6886fd08111478c27025b743e4e29981bf",
       "seasons": [
         2010,
         2011,

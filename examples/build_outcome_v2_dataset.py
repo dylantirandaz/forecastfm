@@ -14,6 +14,7 @@ from forecastfm.elo_residual import (
     EloResidualRow,
     fit_elo_residual,
 )
+from forecastfm.integrity import canonical_sha256
 from forecastfm.models import TrainingExample
 from forecastfm.nba_data import (
     DATE_AMBIGUOUS_GAME_IDS,
@@ -32,10 +33,12 @@ from forecastfm.nba_v2 import (
     load_nba_v2_examples,
     side_swap_nba_v2_example,
 )
-from forecastfm.outcome import TEAM_OUTCOME
+from forecastfm.outcome import OUTCOME_INPUT_SCHEMA_VERSION, TEAM_OUTCOME
 from forecastfm.outcome_v2_metrics import (
+    FAILURE_REALIZED_PROBABILITY,
+    BinaryForecast,
     BinaryProperScores,
-    DatedBinaryForecast,
+    DatedBinaryCohortMember,
     MultiSeasonEvaluation,
     SeasonEvaluation,
     evaluate_multi_season,
@@ -60,6 +63,18 @@ MANIFEST_PATH = OUTPUT_DIRECTORY / "manifest.json"
 TRAIN_LAST_SEASON = 2009
 VALIDATION_SEASONS = (2010, 2011, 2012)
 HISTORICAL_TEST_SEASONS = (2013, 2014, 2015)
+EXPECTED_TRAIN_COHORT = (
+    51_359,
+    "f94421c2fc21814b3d3219db92b90dd4438ef1829f72054c41e45029eef9cb71",
+)
+EXPECTED_VALIDATION_COHORT = (
+    3_697,
+    "09e82390fe4488a07946c8581afc88cbeac37b65d4f27d8c46e4ccd86184d0e9",
+)
+EXPECTED_HISTORICAL_TEST_COHORT = (
+    3_944,
+    "564126f5a1c95402eb580dd3f4d24f2c8f84f9ec20dd5ff607ac1d8a1769c543",
+)
 
 RICH_FIT_CONFIG = EloResidualFitConfig(steps=1_000, learning_rate=0.1, l2_penalty=0.01)
 RECALIBRATION_FIT_CONFIG = EloResidualFitConfig(
@@ -113,6 +128,7 @@ def main() -> None:
 
     examples, removed_by_season = deduplicate_prompt_orbits(source_examples)
     splits = split_examples(examples)
+    _verify_split_contract(splits)
     development_models = _fit_models(splits.train)
     final_models = _fit_models((*splits.train, *splits.validation))
 
@@ -237,9 +253,10 @@ def _evaluate_models(
     seasons: tuple[int, ...],
     models: _FittedModels,
 ) -> tuple[MultiSeasonEvaluation, MultiSeasonEvaluation, MultiSeasonEvaluation]:
-    rich_vs_raw: list[DatedBinaryForecast] = []
-    recalibration_vs_raw: list[DatedBinaryForecast] = []
-    rich_vs_recalibration: list[DatedBinaryForecast] = []
+    raw_cohort: list[DatedBinaryCohortMember] = []
+    recalibrated_cohort: list[DatedBinaryCohortMember] = []
+    rich_forecasts: list[BinaryForecast] = []
+    recalibrated_forecasts: list[BinaryForecast] = []
     for example in examples:
         elo_probability = example.features.venue_adjusted_elo_probabilities[0]
         scaled_features = scale_features(example, models.feature_scales)
@@ -248,34 +265,39 @@ def _evaluate_models(
             elo_probability,
             (scaled_features[0],),
         )
-        rich_vs_raw.append(_forecast_row(example, rich_probability, elo_probability))
-        recalibration_vs_raw.append(
-            _forecast_row(example, recalibrated_probability, elo_probability)
-        )
-        rich_vs_recalibration.append(
-            _forecast_row(example, rich_probability, recalibrated_probability)
-        )
+        raw_cohort.append(_cohort_member(example, elo_probability))
+        recalibrated_cohort.append(_cohort_member(example, recalibrated_probability))
+        rich_forecasts.append(_forecast(example, rich_probability))
+        recalibrated_forecasts.append(_forecast(example, recalibrated_probability))
     return (
-        evaluate_multi_season(rich_vs_raw, seasons),
-        evaluate_multi_season(recalibration_vs_raw, seasons),
-        evaluate_multi_season(rich_vs_recalibration, seasons),
+        evaluate_multi_season(rich_forecasts, raw_cohort, seasons),
+        evaluate_multi_season(recalibrated_forecasts, raw_cohort, seasons),
+        evaluate_multi_season(rich_forecasts, recalibrated_cohort, seasons),
     )
 
 
-def _forecast_row(
+def _forecast(
     example: NbaV2Example,
     model_probability: float,
+) -> BinaryForecast:
+    return BinaryForecast(
+        question_id=example.training_example.case.question.question_id,
+        team_probability=model_probability,
+    )
+
+
+def _cohort_member(
+    example: NbaV2Example,
     baseline_probability: float,
-) -> DatedBinaryForecast:
+) -> DatedBinaryCohortMember:
     training = example.training_example
     game_date = training.case.question.forecast_at.date()
-    return DatedBinaryForecast(
+    return DatedBinaryCohortMember(
         question_id=training.case.question.question_id,
         season=example.season,
         game_date=game_date,
         realized_team_win=training.realized_outcome == TEAM_OUTCOME,
-        model_team_probability=model_probability,
-        elo_team_probability=baseline_probability,
+        baseline_team_probability=baseline_probability,
     )
 
 
@@ -305,18 +327,16 @@ def deduplicate_prompt_orbits(
 
 def split_examples(examples: Sequence[NbaV2Example]) -> _Splits:
     """Apply the predeclared source-season boundaries."""
-    train = tuple(example for example in examples if _example_season(example) <= TRAIN_LAST_SEASON)
-    validation = tuple(
-        example for example in examples if _example_season(example) in VALIDATION_SEASONS
-    )
+    train = tuple(example for example in examples if example.season <= TRAIN_LAST_SEASON)
+    validation = tuple(example for example in examples if example.season in VALIDATION_SEASONS)
     historical_test = tuple(
-        example for example in examples if _example_season(example) in HISTORICAL_TEST_SEASONS
+        example for example in examples if example.season in HISTORICAL_TEST_SEASONS
     )
     if not train or not validation or not historical_test:
         raise RuntimeError("outcome-v2 chronological splits must all be non-empty")
-    if {_example_season(example) for example in validation} != set(VALIDATION_SEASONS):
+    if {example.season for example in validation} != set(VALIDATION_SEASONS):
         raise RuntimeError("outcome-v2 validation seasons are incomplete")
-    if {_example_season(example) for example in historical_test} != set(HISTORICAL_TEST_SEASONS):
+    if {example.season for example in historical_test} != set(HISTORICAL_TEST_SEASONS):
         raise RuntimeError("outcome-v2 historical-test seasons are incomplete")
     return _Splits(train=train, validation=validation, historical_test=historical_test)
 
@@ -348,10 +368,6 @@ def _prompt_hash(example: TrainingExample) -> str:
     return sha256(render_case(example.case).encode()).hexdigest()
 
 
-def _example_season(example: NbaV2Example) -> int:
-    return example.season
-
-
 def _manifest(build: _Build) -> dict[str, object]:
     final_rich_raw, _, final_rich_recalibration = build.final_evaluations
     output_paths = (
@@ -363,6 +379,7 @@ def _manifest(build: _Build) -> dict[str, object]:
     )
     return {
         "schema_version": 1,
+        "outcome_input_schema_version": OUTCOME_INPUT_SCHEMA_VERSION,
         "source": {
             "name": "FiveThirtyEight historical NBA Elo",
             "page": SOURCE_PAGE,
@@ -401,14 +418,20 @@ def _manifest(build: _Build) -> dict[str, object]:
                 "through_season": TRAIN_LAST_SEASON,
                 "original_games": len(build.splits.train),
                 "side_swapped_training_rows": len(build.splits.train) * 2,
+                "question_ids_sha256": _question_ids_sha256(build.splits.train),
+                "full_cohort_sha256": cohort_sha256(build.splits.train),
             },
             "validation": {
                 "seasons": list(VALIDATION_SEASONS),
                 "original_games": len(build.splits.validation),
+                "question_ids_sha256": _question_ids_sha256(build.splits.validation),
+                "full_cohort_sha256": cohort_sha256(build.splits.validation),
             },
             "historical_test": {
                 "seasons": list(HISTORICAL_TEST_SEASONS),
                 "original_games": len(build.splits.historical_test),
+                "question_ids_sha256": _question_ids_sha256(build.splits.historical_test),
+                "full_cohort_sha256": cohort_sha256(build.splits.historical_test),
             },
         },
         "tabular_models": {
@@ -426,6 +449,12 @@ def _manifest(build: _Build) -> dict[str, object]:
             "historical_test": _comparison_payloads(build.final_evaluations),
             "historical_gate_passes_raw_elo": final_rich_raw.passes,
             "historical_gate_passes_recalibrated_elo": final_rich_recalibration.passes,
+            "valid_probability_contract": "strictly between zero and one",
+            "failed_forecast_realized_probability": FAILURE_REALIZED_PROBABILITY,
+            "failure_handling": (
+                "Missing IDs and explicit malformed-output records remain in the denominator "
+                "at the frozen worst-case realized probability."
+            ),
             "full_outcome_v2_ready": False,
             "full_outcome_v2_missing": [
                 "licensed point-in-time travel data",
@@ -493,7 +522,7 @@ def _evaluation_payload(
         "baseline": baseline_name,
         "declared_seasons": list(evaluation.declared_seasons),
         "game_count": evaluation.game_count,
-        "pooled_baseline_relative_log_score": evaluation.pooled_elo_relative_log_score,
+        "pooled_baseline_relative_log_score": evaluation.pooled_baseline_relative_log_score,
         "bootstrap": {
             "block_days": evaluation.bootstrap_block_days,
             "resamples": evaluation.bootstrap_resamples,
@@ -511,8 +540,8 @@ def _season_payload(evaluation: SeasonEvaluation) -> dict[str, object]:
         "game_count": evaluation.game_count,
         "calendar_block_count": evaluation.calendar_block_count,
         "model": _scores_payload(evaluation.model),
-        "baseline": _scores_payload(evaluation.elo),
-        "baseline_relative_log_score": evaluation.mean_elo_relative_log_score,
+        "baseline": _scores_payload(evaluation.baseline),
+        "baseline_relative_log_score": evaluation.mean_baseline_relative_log_score,
         "lower_one_sided_95": evaluation.lower_one_sided_95,
         "passes": evaluation.passes,
     }
@@ -523,6 +552,39 @@ def _scores_payload(scores: BinaryProperScores) -> dict[str, float]:
         "mean_log_loss": scores.mean_log_loss,
         "mean_brier": scores.mean_brier,
     }
+
+
+def _question_ids_sha256(examples: Sequence[NbaV2Example]) -> str:
+    question_ids = [example.training_example.case.question.question_id for example in examples]
+    return canonical_sha256(question_ids)
+
+
+def cohort_sha256(examples: Sequence[NbaV2Example]) -> str:
+    """Hash frozen IDs, dates, outcomes, seasons, and raw Elo baselines."""
+    records: list[dict[str, object]] = []
+    for example in examples:
+        training = example.training_example
+        records.append(
+            {
+                "question_id": training.case.question.question_id,
+                "season": example.season,
+                "game_date": training.case.question.forecast_at.date().isoformat(),
+                "realized_team_win": training.realized_outcome == TEAM_OUTCOME,
+                "elo_team_probability": example.features.venue_adjusted_elo_probabilities[0],
+            }
+        )
+    return canonical_sha256(records)
+
+
+def _verify_split_contract(splits: _Splits) -> None:
+    contracts = (
+        ("train", splits.train, EXPECTED_TRAIN_COHORT),
+        ("validation", splits.validation, EXPECTED_VALIDATION_COHORT),
+        ("historical test", splits.historical_test, EXPECTED_HISTORICAL_TEST_COHORT),
+    )
+    for name, examples, (expected_count, expected_hash) in contracts:
+        if len(examples) != expected_count or cohort_sha256(examples) != expected_hash:
+            raise RuntimeError(f"outcome-v2 {name} cohort differs from its frozen contract")
 
 
 if __name__ == "__main__":

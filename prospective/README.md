@@ -12,8 +12,10 @@ The protocol has four layers:
    permanent `sampler_path`.
 3. A cohort file freezes every game in a declared slate, its schedule snapshot, and each forecast
    deadline.
-4. `ledger.jsonl` hash-chains one complete forecast batch and, later, one complete resolution batch
-   for each cohort. Every raw model response is retained.
+4. Each evidence bundle freezes source hashes, timestamps, rights, sensitivity, and the exact
+   numeric records used by one forecast.
+5. `ledger.jsonl` hash-chains one complete forecast batch and, later, one complete resolution batch
+   for each cohort. Every raw model response and evidence-bundle digest is retained.
 
 The first two locks are created with:
 
@@ -51,6 +53,8 @@ is **locally tamper-evident, not externally timestamped**.
 ## Forecast rules
 
 - Declare every game in the cohort before generating predictions.
+- Bind each submission to the exact `evidence_bundle_sha256`; never substitute evidence after a
+  model call.
 - Use one model call and one retained raw response per game; never select among retries.
 - Commit the complete cohort before its earliest deadline and before every scheduled tipoff.
 - Append resolutions later; never edit forecasts to add outcomes.

@@ -15,6 +15,7 @@ The repository currently provides:
 - proper scoring and calibration summaries;
 - a pinned, real NBA Elo forecast dataset with chronological splits;
 - leakage-safe historical NBA rolling features and a simple Elo-correction baseline;
+- a rights-aware connector contract for licensed, point-in-time NBA evidence;
 - a realized-winner outcome objective with side-swap augmentation;
 - strict JSONL serialization; and
 - a vendor-neutral chat-data export boundary with conservative health-term screening;
@@ -241,6 +242,12 @@ season.
 Raw Elo and an Elo recalibration fitted on training data are both comparison baselines. Exact
 cohort coverage is required; failures cannot be silently dropped.
 
+Candidate forecasts carry only an opaque question ID and an interior probability; the scorer joins
+season, date, outcome, and baseline from the frozen cohort. The pinned historical split is bound by
+a full-cohort digest. A missing forecast, or malformed output represented as an explicit failure,
+receives the predeclared worst-case realized probability of `1e-15` rather than being omitted or
+silently clipped.
+
 The source ends in 2015 and has date-only timestamps. It provides no true tipoff or publication
 times, travel distance, injuries, expected lineups, rosters, or player-level metrics. Road-game
 load is only a travel proxy. Existing historical answers are also contamination-prone, so this
@@ -304,15 +311,18 @@ is not used by this workflow.
 - Realized outcomes are never model inputs. They are evaluation labels and, only for outcome v1,
   fixed-token cross-entropy targets.
 - Evaluation files separate model prompts from answer keys.
-- Scoring a frozen cohort rejects missing, extra, duplicate, or relabeled forecasts.
+- Scoring a frozen cohort penalizes missing or selectively dropped forecasts, rejects extra or
+  duplicate IDs, and takes dates, outcomes, seasons, and baselines only from frozen metadata.
 - Prospective batches retain exact prompts, raw responses, and one request identity per game.
 - Ledger validation rejects modified hashes, reordered records, late forecasts, and partial slates.
 - A ledger head counts as time evidence only after independent publication before the deadline.
 - Legacy Elo targets contain sourced probabilities. Outcome-v1 labels contain sourced game
   results. Unsupported rationales are not fabricated.
-- Training exports screen for known health-data language before anything reaches Tinker.
+- Training and inference exports screen for known health-data language before anything reaches
+  Tinker.
   This keyword screen is only a first pass; it does not establish policy or legal compliance.
-- Player health and injury fields are not present in the accepted NBA input columns.
+- Standard Tinker evidence conversion also rejects health-derived source lineage, even when its
+  model-facing feature is an opaque numeric aggregate.
 
 ## Package map
 
@@ -322,6 +332,7 @@ is not used by this workflow.
 - `calibration.py`: reliability bins and expected calibration error.
 - `nba_data.py`: pinned NBA download, leakage-safe transformation, and temporal splits.
 - `nba_v2.py`: prior-date rolling NBA features with exact side-swap symmetry.
+- `nba_evidence.py`: licensed-source rights, timing, lineage, and numeric evidence bundles.
 - `elo_residual.py`: dependency-free cross-entropy correction to Elo log-odds.
 - `outcome_v2_metrics.py`: strict per-season Elo-relative scores and block-bootstrap gate.
 - `serialization.py`: strict, readable JSONL input and output.
@@ -334,7 +345,7 @@ is not used by this workflow.
 - `outcome_metrics.py`: proper outcome scores, calibration, paired intervals, and difficulty bins.
 - `publication.py`: exact local-versus-published Git gates for frozen evaluations.
 - `run_lock.py`: immutable training and trained-sampler experiment locks.
-- `ledger.py`: prospective cohort validation and append-only hash-chain verification.
+- `ledger.py`: prospective cohort validation and an evidence-bound append-only hash chain.
 - `canary.py`: frozen validation call plans, generation records, seals, and answer-free metrics.
 - `canary_history.py`: answer-gated historical diagnostics for already sealed generations.
 

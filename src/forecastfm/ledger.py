@@ -22,7 +22,7 @@ from forecastfm.json_utils import (
 from forecastfm.models import ForecastPrediction
 from forecastfm.prompting import parse_prediction
 
-LEDGER_SCHEMA_VERSION = 1
+LEDGER_SCHEMA_VERSION = 2
 GENESIS_HASH = "0" * 64
 _HASH_CHARS = frozenset("0123456789abcdef")
 _ENVELOPE_KEYS = {
@@ -167,6 +167,7 @@ class ForecastSubmission:
     question_id: str
     input_as_of: datetime
     generated_at: datetime
+    evidence_bundle_sha256: str
     prompt: str
     prompt_sha256: str
     raw_response: str
@@ -177,6 +178,7 @@ class ForecastSubmission:
         _require_text(self.question_id, "question_id")
         _require_utc(self.input_as_of, "input_as_of")
         _require_utc(self.generated_at, "generated_at")
+        _require_hash(self.evidence_bundle_sha256, "evidence_bundle_sha256")
         _require_text(self.prompt, "prompt")
         _require_hash(self.prompt_sha256, "prompt_sha256")
         if text_sha256(self.prompt) != self.prompt_sha256:
@@ -319,6 +321,7 @@ def _forecast_submission_to_dict(submission: ForecastSubmission) -> JsonObject:
         "question_id": submission.question_id,
         "input_as_of": _utc_text(submission.input_as_of),
         "generated_at": _utc_text(submission.generated_at),
+        "evidence_bundle_sha256": submission.evidence_bundle_sha256,
         "prompt": submission.prompt,
         "prompt_sha256": submission.prompt_sha256,
         "raw_response": submission.raw_response,
@@ -337,6 +340,7 @@ def _forecast_submission_from_record(
         "question_id",
         "input_as_of",
         "generated_at",
+        "evidence_bundle_sha256",
         "prompt",
         "prompt_sha256",
         "raw_response",
@@ -353,6 +357,7 @@ def _forecast_submission_from_record(
         question_id=_string(record, "question_id"),
         input_as_of=_time(record, "input_as_of"),
         generated_at=_time(record, "generated_at"),
+        evidence_bundle_sha256=_string(record, "evidence_bundle_sha256"),
         prompt=_string(record, "prompt"),
         prompt_sha256=_string(record, "prompt_sha256"),
         raw_response=_string(record, "raw_response"),

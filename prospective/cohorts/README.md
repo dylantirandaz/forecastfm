@@ -7,6 +7,10 @@ forecast deadline, scheduled tipoff, and allowed outcome labels.
 The ledger append API requires exact cohort coverage: missing, extra, or duplicate games are
 rejected.
 
+Ledger schema version 2 additionally requires an `evidence_bundle_sha256` on every forecast
+submission. The digest commits the source payload hashes, rights snapshot, timing, sensitivity
+lineage, and oriented numeric evidence used to build that game's prompt.
+
 A cohort file has this strict shape:
 
 ```json

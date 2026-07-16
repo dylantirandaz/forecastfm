@@ -24,7 +24,10 @@ from forecastfm.outcome import (
     require_label,
 )
 from forecastfm.prompting import ChatMessage, build_forecast_messages, build_sft_messages
-from forecastfm.tinker_screening import require_health_screen_passes
+from forecastfm.tinker_screening import (
+    require_case_health_screen_passes,
+    require_health_screen_passes,
+)
 
 
 class SftRecord(TypedDict):
@@ -59,6 +62,7 @@ def build_sft_record(example: TrainingExample) -> SftRecord:
 
 def build_forecast_record(case: ForecastCase) -> ForecastRecord:
     """Create a record that cannot expose a target or realized outcome."""
+    require_case_health_screen_passes(case)
     return ForecastRecord(
         question_id=case.question.question_id,
         messages=list(build_forecast_messages(case)),
@@ -77,6 +81,7 @@ def build_outcome_training_record(example: TrainingExample) -> OutcomeTrainingRe
 
 def build_outcome_forecast_record(case: ForecastCase) -> ForecastRecord:
     """Create a target-free input for fixed-label outcome inference."""
+    require_case_health_screen_passes(case)
     return ForecastRecord(
         question_id=case.question.question_id,
         messages=list(build_outcome_messages(case)),

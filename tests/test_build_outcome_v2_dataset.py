@@ -16,6 +16,7 @@ from forecastfm.json_utils import (
 from forecastfm.models import Distribution
 from forecastfm.nba_data import SOURCE_SHA256
 from forecastfm.nba_v2 import NbaV2Example, NbaV2Features, side_swap_nba_v2_example
+from forecastfm.outcome import OUTCOME_INPUT_SCHEMA_VERSION
 from tests.helpers import make_nba_training_example
 
 
@@ -114,12 +115,20 @@ def test_checked_in_manifest_preserves_the_failed_rl_gate() -> None:
         required_field(evaluation, "historical_test"),
         "historical_test",
     )
+    splits = require_object(required_field(manifest, "splits"), "splits")
+    historical_split = require_object(
+        required_field(splits, "historical_test"),
+        "historical_test split",
+    )
     rich = require_object(required_field(historical, "rich_vs_raw_elo"), "rich_vs_raw_elo")
     seasons = require_list(required_field(rich, "seasons"), "seasons")
     season_records = tuple(require_object(value, "season") for value in seasons)
     rl = require_object(required_field(manifest, "rl"), "rl")
 
     assert required_field(source, "sha256") == SOURCE_SHA256
+    assert required_field(manifest, "outcome_input_schema_version") == (
+        OUTCOME_INPUT_SCHEMA_VERSION
+    )
     assert required_field(evaluation, "historical_gate_passes_raw_elo") is False
     assert required_field(evaluation, "historical_gate_passes_recalibrated_elo") is False
     assert tuple(required_field(record, "season") for record in season_records) == (
@@ -132,5 +141,16 @@ def test_checked_in_manifest_preserves_the_failed_rl_gate() -> None:
         True,
         False,
     )
+    assert required_field(historical_split, "question_ids_sha256") == (
+        "8a0199f95e6fd5be3f59787329e6c2128e50905ef3f16ccfeaee0b2ce06097b6"
+    )
+    assert (
+        required_field(historical_split, "full_cohort_sha256")
+        == (build_outcome_v2_dataset.EXPECTED_HISTORICAL_TEST_COHORT[1])
+    )
+    assert required_field(evaluation, "valid_probability_contract") == (
+        "strictly between zero and one"
+    )
+    assert required_field(evaluation, "failed_forecast_realized_probability") == 1e-15
     assert required_field(rl, "ready") is False
     assert required_field(rl, "paid_tinker_job_launched") is False

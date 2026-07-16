@@ -74,6 +74,7 @@ def make_forecast(question_id: str, probability: float = 0.6) -> ForecastSubmiss
         question_id=question_id,
         input_as_of=INPUT_AS_OF,
         generated_at=GENERATED_AT,
+        evidence_bundle_sha256="c" * 64,
         prompt=prompt,
         prompt_sha256=text_sha256(prompt),
         raw_response=raw_response,
@@ -147,6 +148,11 @@ def test_raw_response_must_equal_stored_prediction() -> None:
 
     with pytest.raises(LedgerValidationError, match="does not match"):
         replace(stored, raw_response=raw_for_different_prediction)
+
+
+def test_forecast_requires_an_evidence_bundle_digest() -> None:
+    with pytest.raises(LedgerValidationError, match="evidence_bundle_sha256"):
+        replace(make_forecast("question-1"), evidence_bundle_sha256="not-a-digest")
 
 
 def test_forecast_batch_rejects_missing_game_and_late_generation(tmp_path: Path) -> None:

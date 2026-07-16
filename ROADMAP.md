@@ -65,7 +65,11 @@ final claim.
 - Compare against raw Elo and an Elo recalibration fitted only on training data.
 - Require positive Elo-relative log score and a positive one-sided 95% seven-day calendar-block
   bootstrap lower bound separately in every declared chronological evaluation season.
-- Reject missing, extra, duplicate, relabeled, or selectively dropped forecasts.
+- Freeze the full ID/date/season/baseline cohort contract before scoring.
+- Join candidate ID/probability pairs to that contract, penalize missing or selectively dropped
+  forecasts, reject extra or duplicate IDs, and take scoring metadata only from the frozen cohort.
+- Validate licensed evidence as oriented numeric records with source hashes, point-in-time capture,
+  rights, and sensitivity lineage before it enters either model path.
 
 The current source has date-only timestamps and no true travel, injury, expected-lineup, roster,
 or player-level data. Existing historical answers are contamination-prone. This milestone does not
@@ -94,7 +98,7 @@ but 2013 was inconclusive and 2015 was negative. The failure is preserved in
 
 ## 8. NBA domain pack
 
-- Define a buyer-owned-data connector interface.
+- Define a buyer-owned-data connector interface. — complete
 - Keep restricted or buyer-licensed rows outside the redistributable core.
 - Exclude player health and injury information from standard Tinker uploads.
 - Compare numeric-only, ForecastFM-only, hybrid, and market-aware forecasts.
