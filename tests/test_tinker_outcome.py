@@ -124,6 +124,7 @@ def _configure_prerequisites(
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     monkeypatch.setattr(train_tinker_outcome_sft, "DATA_PATH", data_path)
     monkeypatch.setattr(train_tinker_outcome_sft, "MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(train_tinker_outcome_sft, "LOG_PATH", tmp_path / "new-log")
     monkeypatch.setattr(
         train_tinker_outcome_sft,
         "verify_outcome_training_lock",
