@@ -140,6 +140,15 @@ git push origin main
 uv run --extra tinker python -m examples.run_tinker_outcome_sft_local
 ```
 
+After training completes, bind and publish the permanent sampler path before inference:
+
+```bash
+uv run --extra tinker python examples/freeze_outcome_experiment.py
+git add prospective/outcome_v1/steps_32/experiment.json
+git commit -m "Freeze outcome v1 32-step sampler"
+git push origin main
+```
+
 Inference does not sample a decimal or JSON response. It scores the `TEAM` and `OTHER` tokens with
 Tinker's prompt-log-probability API, renormalizes those two scores, and averages each forecast with
 the complemented side-swapped forecast. The unnormalized valid-label mass is retained as a
