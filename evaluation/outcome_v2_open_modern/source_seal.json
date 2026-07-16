@@ -1,0 +1,66 @@
+{
+  "development": {
+    "filename": "development.csv",
+    "ordered_ids_sha256": "5befb0fe1dc497826384ac1c05852f3c5ce13d00b5cc0f4a879564456baf1a1a",
+    "row_count": 6392,
+    "season_counts": {
+      "2016": 1316,
+      "2017": 1309,
+      "2018": 1312,
+      "2019": 1312,
+      "2020": 1143
+    },
+    "seasons": [
+      2016,
+      2017,
+      2018,
+      2019,
+      2020
+    ],
+    "sha256": "02baf591b285f0537088b2fa05dfc0b98020b2a04a7441ee0eb7061a75881690"
+  },
+  "protocol_sha256": "36bed36f546e1a7f9fe6dbc6f9c3582f1a41746cbee738ed89f92918cacf6aae",
+  "safety": {
+    "test_input_columns": [
+      "game_id",
+      "season",
+      "date",
+      "team1",
+      "team2",
+      "prob1",
+      "prob2"
+    ],
+    "test_labels_written": false,
+    "test_metrics_computed": false
+  },
+  "schema_version": 1,
+  "source": {
+    "byte_size": 655771,
+    "commit": "f6d5b2e1d6da2889345d381c41431f9a4ee208dd",
+    "git_blob_sha": "cd4308f1753377b4b1e197640539233a328e6b33",
+    "row_count": 8886,
+    "sha256": "fb99d5a4870ae761684313b36433926f9f53b0e0d272b922c73aa287da20ab20",
+    "url": "https://raw.githubusercontent.com/fivethirtyeight/checking-our-work-data/f6d5b2e1d6da2889345d381c41431f9a4ee208dd/nba_games.csv"
+  },
+  "status": "sealed_for_development",
+  "test_answers": {
+    "materialized": false,
+    "ordered_ids_sha256": "74fffad360eaa74d80f2a8f7f838173cee21658c8967b0adb2312ef3f3b76afb",
+    "row_count": 2494,
+    "sha256": "dae7df7f96a7b6cff4624049316cddfd3946753bc8005cdac19f7a698ae886be"
+  },
+  "test_inputs": {
+    "filename": "test_inputs.csv",
+    "ordered_ids_sha256": "74fffad360eaa74d80f2a8f7f838173cee21658c8967b0adb2312ef3f3b76afb",
+    "row_count": 2494,
+    "season_counts": {
+      "2021": 1171,
+      "2022": 1323
+    },
+    "seasons": [
+      2021,
+      2022
+    ],
+    "sha256": "e92bab54ce46d2cb38de2969e529092bad607394528a68faf0a58231b089b0ed"
+  }
+}
