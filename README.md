@@ -14,6 +14,7 @@ The repository currently provides:
 - Bayesian updates in log-likelihood space;
 - proper scoring and calibration summaries;
 - a pinned, real NBA Elo forecast dataset with chronological splits;
+- leakage-safe historical NBA rolling features and a simple Elo-correction baseline;
 - a realized-winner outcome objective with side-swap augmentation;
 - strict JSONL serialization; and
 - a vendor-neutral chat-data export boundary with conservative health-term screening;
@@ -212,6 +213,54 @@ This blocks accidental and code-path leakage, but it cannot prove that a person 
 program never inspected plaintext answers already present on the local machine. The results are
 historical development diagnostics and remain contamination-prone, not prospective evidence.
 
+## Outcome v2: leakage-safe Elo correction
+
+Outcome v2 uses the same pinned, real FiveThirtyEight history. It derives anonymous pregame
+features from games on earlier dates only: venue-adjusted Elo log-odds, rest and back-to-back
+status, games and road games in the previous seven days, and trailing-ten win rate, margin,
+opponent Elo, and history length. Each value is an oriented team-minus-opponent difference.
+History resets at the start of each season, and every game on a date is featurized before any
+result from that date updates team history. The current game's result is only the training target.
+
+The first model is deliberately small: dependency-free logistic regression adds a learned linear
+correction to Elo's log-odds and minimizes ordinary winner cross-entropy:
+
+```text
+p(team wins) = sigmoid(logit(p_Elo) + dot(weights, pregame_features))
+```
+
+There is no free intercept, which preserves exact team/opponent side-swap symmetry. This tabular
+model is a falsification baseline before another paid ForecastFM fine-tune, not a forecasting
+claim by itself.
+
+Advancement is a per-season conjunction. On every declared chronological evaluation season, the
+model must have positive Elo-relative log score and a positive one-sided 95% lower bound from the
+predeclared seven-day calendar-block bootstrap. A strong pooled result cannot conceal a losing
+season.
+
+Raw Elo and an Elo recalibration fitted on training data are both comparison baselines. Exact
+cohort coverage is required; failures cannot be silently dropped.
+
+The source ends in 2015 and has date-only timestamps. It provides no true tipoff or publication
+times, travel distance, injuries, expected lineups, rosters, or player-level metrics. Road-game
+load is only a travel proxy. Existing historical answers are also contamination-prone, so this
+evaluation cannot establish a prospective or truly untouched win over Elo. No such win is
+currently claimed.
+
+The first frozen historical diagnostic confirms why the gate is strict. The richer model's pooled
+Elo-relative log score is positive (`+0.000884`), but only 2014 passes independently. The 2013
+confidence bound crosses zero, and 2015 has negative mean improvement. The checked-in
+`outcome_v2` manifest therefore marks both raw- and recalibrated-Elo gates false and RL not ready.
+
+### When RL becomes useful
+
+RL is gated on the tabular and supervised ForecastFM corrections first clearing the multi-season
+Elo gate. Its intended job is sequential decision-making: choose which permitted evidence source
+to inspect, whether to pay to retrieve it, how much to trust it, when to update, and when to stop.
+The reward remains a proper realized-outcome log score relative to Elo, minus predeclared tool
+costs and an optional KL penalty. RL does not replace the fixed chronological evaluation or make
+missing point-in-time data safe to use.
+
 ## Legacy paired validation canary
 
 The next gate is a frozen 64-game validation canary. Selection uses only the lexicographically
@@ -272,6 +321,9 @@ is not used by this workflow.
 - `scoring.py`: Brier score, log loss, and aggregate evaluation.
 - `calibration.py`: reliability bins and expected calibration error.
 - `nba_data.py`: pinned NBA download, leakage-safe transformation, and temporal splits.
+- `nba_v2.py`: prior-date rolling NBA features with exact side-swap symmetry.
+- `elo_residual.py`: dependency-free cross-entropy correction to Elo log-odds.
+- `outcome_v2_metrics.py`: strict per-season Elo-relative scores and block-bootstrap gate.
 - `serialization.py`: strict, readable JSONL input and output.
 - `prompting.py`: the model prompt and strict prediction parser.
 - `tinker_data.py`: screened SFT conversation export without SDK coupling.
@@ -288,10 +340,10 @@ is not used by this workflow.
 
 ## Next milestones
 
-1. Run the 32-step outcome canary and score the clean chronological development period.
-2. Continue to 128, 512, and 2,048 steps only while outcome log loss improves.
-3. Compare against Elo with Brier, log loss, calibration, and side-swap consistency.
-4. Freeze the winning recipe before opening any later holdout.
-5. Add richer point-in-time NBA inputs only after the outcome baseline is sound.
+1. Add licensed, point-in-time richer inputs to address the failed historical Elo gate.
+2. Re-run a tabular falsification baseline on newly frozen chronological seasons.
+3. Fine-tune ForecastFM on the same realized-winner objective only after that baseline is sound.
+4. Require every declared season to clear the frozen Elo-relative log-score gate.
+5. Attempt sequential evidence RL only after the supervised full-information model passes.
 
 See [ROADMAP.md](ROADMAP.md) for the acceptance criteria for each milestone.

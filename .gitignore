@@ -15,4 +15,7 @@ data/processed/*
 !data/processed/outcome_v1/
 data/processed/outcome_v1/*
 !data/processed/outcome_v1/manifest.json
+!data/processed/outcome_v2/
+data/processed/outcome_v2/*
+!data/processed/outcome_v2/manifest.json
 examples/generated/

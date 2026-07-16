@@ -54,14 +54,45 @@ development log loss and Brier score, acceptable calibration, and side-swap cons
 holdout answers already exist locally, so a new prospective cohort is required for a truly unseen
 final claim.
 
-## 5. General forecasting domains
+## 5. Leakage-safe outcome v2 — in progress
+
+- Derive rest, back-to-back, recent schedule load, road-game load, rolling form, and schedule
+  strength from the pinned real history.
+- Reset state by season and batch all same-date games before updating history.
+- Express every feature as an oriented difference with an exact side swap.
+- Fit a readable cross-entropy logistic correction to Elo before paying for another fine-tune.
+- Train ForecastFM on the same realized winner and fixed candidate-token probability contract.
+- Compare against raw Elo and an Elo recalibration fitted only on training data.
+- Require positive Elo-relative log score and a positive one-sided 95% seven-day calendar-block
+  bootstrap lower bound separately in every declared chronological evaluation season.
+- Reject missing, extra, duplicate, relabeled, or selectively dropped forecasts.
+
+The current source has date-only timestamps and no true travel, injury, expected-lineup, roster,
+or player-level data. Existing historical answers are contamination-prone. This milestone does not
+claim that outcome v2 beats Elo; a prospective cohort is still required for a truly untouched
+result.
+
+The first historical run failed the conjunction gate: pooled Elo-relative log score was positive,
+but 2013 was inconclusive and 2015 was negative. The failure is preserved in
+`data/processed/outcome_v2/manifest.json`; it must not be tuned away using those opened seasons.
+
+## 6. Sequential evidence RL — gated
+
+- Begin only after both the tabular and supervised ForecastFM paths clear the multi-season gate.
+- Let the policy choose evidence sources, retrieval, updates, trust, and stopping decisions.
+- Reward realized-outcome log score relative to Elo, minus predeclared tool cost and optional KL.
+- Compare with static and budget-matched policies on the same exact chronological cohorts.
+- Keep source rights, point-in-time availability, failure penalties, and prospective publication
+  rules unchanged.
+
+## 7. General forecasting domains
 
 - Add versioned public time-series snapshots.
 - Add original event questions with explicit resolution rules.
 - Test binary, multiclass, and later continuous distributions.
 - Maintain temporal and domain-held-out evaluation sets.
 
-## 6. NBA domain pack
+## 8. NBA domain pack
 
 - Define a buyer-owned-data connector interface.
 - Keep restricted or buyer-licensed rows outside the redistributable core.
@@ -71,7 +102,7 @@ final claim.
 - Commit an append-only forecast ledger before each game resolves.
 - Require exact cohort coverage and paired comparisons during the 2026–27 season.
 
-## 7. Interpretability
+## 9. Interpretability
 
 - Export the LoRA adapter and collect matched base/fine-tuned activations locally.
 - Study features related to base-rate use, evidence updates, and overconfidence.

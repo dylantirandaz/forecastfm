@@ -1,0 +1,608 @@
+{
+  "anti_cheating": {
+    "future_results_visible": false,
+    "historical_warning": "These answers already existed locally and may occur in model pretraining. This is a contamination-prone retrospective diagnostic, not a prospective claim.",
+    "prompt_orbits_after_deduplication": 59000,
+    "prompt_orbits_before_deduplication": 59004,
+    "public_records_are_anonymous": true,
+    "removed_prompt_orbits_by_season": {
+      "1947": 3,
+      "1971": 1
+    },
+    "same_date_results_visible": false,
+    "target": "realized winner; never an input feature",
+    "team_identity": "used only inside the feature state machine"
+  },
+  "evaluation": {
+    "full_outcome_v2_missing": [
+      "licensed point-in-time travel data",
+      "licensed timestamped availability and expected-lineup data",
+      "roster and player-level rolling metrics",
+      "at least two prospectively frozen evaluation seasons"
+    ],
+    "full_outcome_v2_ready": false,
+    "historical_gate_passes_raw_elo": false,
+    "historical_gate_passes_recalibrated_elo": false,
+    "historical_test": {
+      "recalibrated_vs_raw_elo": {
+        "baseline": "raw_elo",
+        "bootstrap": {
+          "block_days": 7,
+          "one_sided_alpha": 0.05,
+          "resamples": 10000,
+          "seed": 20260716
+        },
+        "declared_seasons": [
+          2013,
+          2014,
+          2015
+        ],
+        "game_count": 3944,
+        "passes_every_season": false,
+        "pooled_baseline_relative_log_score": -7.889356061468214e-05,
+        "seasons": [
+          {
+            "baseline": {
+              "mean_brier": 0.20347158897182022,
+              "mean_log_loss": 0.591641869515421
+            },
+            "baseline_relative_log_score": -2.6105516803534624e-05,
+            "calendar_block_count": 34,
+            "game_count": 1314,
+            "lower_one_sided_95": -0.00011691148550528255,
+            "model": {
+              "mean_brier": 0.20348352343189044,
+              "mean_log_loss": 0.5916679750322245
+            },
+            "passes": false,
+            "season": 2013
+          },
+          {
+            "baseline": {
+              "mean_brier": 0.21263176804104356,
+              "mean_log_loss": 0.6124927869738066
+            },
+            "baseline_relative_log_score": -0.00011909837374207419,
+            "calendar_block_count": 33,
+            "game_count": 1319,
+            "lower_one_sided_95": -0.0002398641175937949,
+            "model": {
+              "mean_brier": 0.2126758550240999,
+              "mean_log_loss": 0.6126118853475486
+            },
+            "passes": false,
+            "season": 2014
+          },
+          {
+            "baseline": {
+              "mean_brier": 0.20844088114236387,
+              "mean_log_loss": 0.6033432007772686
+            },
+            "baseline_relative_log_score": -9.135224944215561e-05,
+            "calendar_block_count": 34,
+            "game_count": 1311,
+            "lower_one_sided_95": -0.00017568407669132002,
+            "model": {
+              "mean_brier": 0.20847397756308692,
+              "mean_log_loss": 0.6034345530267107
+            },
+            "passes": false,
+            "season": 2015
+          }
+        ]
+      },
+      "rich_vs_raw_elo": {
+        "baseline": "raw_elo",
+        "bootstrap": {
+          "block_days": 7,
+          "one_sided_alpha": 0.05,
+          "resamples": 10000,
+          "seed": 20260716
+        },
+        "declared_seasons": [
+          2013,
+          2014,
+          2015
+        ],
+        "game_count": 3944,
+        "passes_every_season": false,
+        "pooled_baseline_relative_log_score": 0.0008837214504029133,
+        "seasons": [
+          {
+            "baseline": {
+              "mean_brier": 0.20347158897182022,
+              "mean_log_loss": 0.591641869515421
+            },
+            "baseline_relative_log_score": 0.00027204050124900295,
+            "calendar_block_count": 34,
+            "game_count": 1314,
+            "lower_one_sided_95": -0.0023493416776281645,
+            "model": {
+              "mean_brier": 0.20326554080468384,
+              "mean_log_loss": 0.5913698290141719
+            },
+            "passes": false,
+            "season": 2013
+          },
+          {
+            "baseline": {
+              "mean_brier": 0.21263176804104356,
+              "mean_log_loss": 0.6124927869738066
+            },
+            "baseline_relative_log_score": 0.00301622258103085,
+            "calendar_block_count": 33,
+            "game_count": 1319,
+            "lower_one_sided_95": 0.0009287135429346502,
+            "model": {
+              "mean_brier": 0.21117688070616408,
+              "mean_log_loss": 0.6094765643927758
+            },
+            "passes": true,
+            "season": 2014
+          },
+          {
+            "baseline": {
+              "mean_brier": 0.20844088114236387,
+              "mean_log_loss": 0.6033432007772686
+            },
+            "baseline_relative_log_score": -0.0006487119775986198,
+            "calendar_block_count": 34,
+            "game_count": 1311,
+            "lower_one_sided_95": -0.002603852380126097,
+            "model": {
+              "mean_brier": 0.20880919532294678,
+              "mean_log_loss": 0.6039919127548672
+            },
+            "passes": false,
+            "season": 2015
+          }
+        ]
+      },
+      "rich_vs_recalibrated_elo": {
+        "baseline": "training_only_recalibrated_elo",
+        "bootstrap": {
+          "block_days": 7,
+          "one_sided_alpha": 0.05,
+          "resamples": 10000,
+          "seed": 20260716
+        },
+        "declared_seasons": [
+          2013,
+          2014,
+          2015
+        ],
+        "game_count": 3944,
+        "passes_every_season": false,
+        "pooled_baseline_relative_log_score": 0.0009626150110175955,
+        "seasons": [
+          {
+            "baseline": {
+              "mean_brier": 0.20348352343189044,
+              "mean_log_loss": 0.5916679750322245
+            },
+            "baseline_relative_log_score": 0.00029814601805253755,
+            "calendar_block_count": 34,
+            "game_count": 1314,
+            "lower_one_sided_95": -0.002312470882591297,
+            "model": {
+              "mean_brier": 0.20326554080468384,
+              "mean_log_loss": 0.5913698290141719
+            },
+            "passes": false,
+            "season": 2013
+          },
+          {
+            "baseline": {
+              "mean_brier": 0.2126758550240999,
+              "mean_log_loss": 0.6126118853475486
+            },
+            "baseline_relative_log_score": 0.003135320954772924,
+            "calendar_block_count": 33,
+            "game_count": 1319,
+            "lower_one_sided_95": 0.0010622738393647492,
+            "model": {
+              "mean_brier": 0.21117688070616408,
+              "mean_log_loss": 0.6094765643927758
+            },
+            "passes": true,
+            "season": 2014
+          },
+          {
+            "baseline": {
+              "mean_brier": 0.20847397756308692,
+              "mean_log_loss": 0.6034345530267107
+            },
+            "baseline_relative_log_score": -0.0005573597281564643,
+            "calendar_block_count": 34,
+            "game_count": 1311,
+            "lower_one_sided_95": -0.002527846340676355,
+            "model": {
+              "mean_brier": 0.20880919532294678,
+              "mean_log_loss": 0.6039919127548672
+            },
+            "passes": false,
+            "season": 2015
+          }
+        ]
+      }
+    },
+    "validation": {
+      "recalibrated_vs_raw_elo": {
+        "baseline": "raw_elo",
+        "bootstrap": {
+          "block_days": 7,
+          "one_sided_alpha": 0.05,
+          "resamples": 10000,
+          "seed": 20260716
+        },
+        "declared_seasons": [
+          2010,
+          2011,
+          2012
+        ],
+        "game_count": 3697,
+        "passes_every_season": false,
+        "pooled_baseline_relative_log_score": -8.36463606652386e-05,
+        "seasons": [
+          {
+            "baseline": {
+              "mean_brier": 0.2017021634778976,
+              "mean_log_loss": 0.5886239705067672
+            },
+            "baseline_relative_log_score": -6.931977217267573e-05,
+            "calendar_block_count": 34,
+            "game_count": 1312,
+            "lower_one_sided_95": -0.00025430424916028774,
+            "model": {
+              "mean_brier": 0.20172086866994482,
+              "mean_log_loss": 0.5886932902789398
+            },
+            "passes": false,
+            "season": 2010
+          },
+          {
+            "baseline": {
+              "mean_brier": 0.20217104350343554,
+              "mean_log_loss": 0.589545835488795
+            },
+            "baseline_relative_log_score": -6.694842884488346e-05,
+            "calendar_block_count": 33,
+            "game_count": 1311,
+            "lower_one_sided_95": -0.0002591286092574361,
+            "model": {
+              "mean_brier": 0.20219415626533868,
+              "mean_log_loss": 0.5896127839176399
+            },
+            "passes": false,
+            "season": 2011
+          },
+          {
+            "baseline": {
+              "mean_brier": 0.20827268719220485,
+              "mean_log_loss": 0.6041577223288878
+            },
+            "baseline_relative_log_score": -0.00012153041347597242,
+            "calendar_block_count": 27,
+            "game_count": 1074,
+            "lower_one_sided_95": -0.00030443352049345417,
+            "model": {
+              "mean_brier": 0.20831054808239216,
+              "mean_log_loss": 0.6042792527423637
+            },
+            "passes": false,
+            "season": 2012
+          }
+        ]
+      },
+      "rich_vs_raw_elo": {
+        "baseline": "raw_elo",
+        "bootstrap": {
+          "block_days": 7,
+          "one_sided_alpha": 0.05,
+          "resamples": 10000,
+          "seed": 20260716
+        },
+        "declared_seasons": [
+          2010,
+          2011,
+          2012
+        ],
+        "game_count": 3697,
+        "passes_every_season": false,
+        "pooled_baseline_relative_log_score": 0.002074273512039282,
+        "seasons": [
+          {
+            "baseline": {
+              "mean_brier": 0.2017021634778976,
+              "mean_log_loss": 0.5886239705067672
+            },
+            "baseline_relative_log_score": 0.003775522509859098,
+            "calendar_block_count": 34,
+            "game_count": 1312,
+            "lower_one_sided_95": 0.00113868778685955,
+            "model": {
+              "mean_brier": 0.2003500436657435,
+              "mean_log_loss": 0.584848447996908
+            },
+            "passes": true,
+            "season": 2010
+          },
+          {
+            "baseline": {
+              "mean_brier": 0.20217104350343554,
+              "mean_log_loss": 0.589545835488795
+            },
+            "baseline_relative_log_score": -0.0001985843919431311,
+            "calendar_block_count": 33,
+            "game_count": 1311,
+            "lower_one_sided_95": -0.003000565949149938,
+            "model": {
+              "mean_brier": 0.20227146260355297,
+              "mean_log_loss": 0.5897444198807381
+            },
+            "passes": false,
+            "season": 2011
+          },
+          {
+            "baseline": {
+              "mean_brier": 0.20827268719220485,
+              "mean_log_loss": 0.6041577223288878
+            },
+            "baseline_relative_log_score": 0.0027704355483347603,
+            "calendar_block_count": 27,
+            "game_count": 1074,
+            "lower_one_sided_95": -0.0002932532296809831,
+            "model": {
+              "mean_brier": 0.20723838695397076,
+              "mean_log_loss": 0.601387286780553
+            },
+            "passes": false,
+            "season": 2012
+          }
+        ]
+      },
+      "rich_vs_recalibrated_elo": {
+        "baseline": "training_only_recalibrated_elo",
+        "bootstrap": {
+          "block_days": 7,
+          "one_sided_alpha": 0.05,
+          "resamples": 10000,
+          "seed": 20260716
+        },
+        "declared_seasons": [
+          2010,
+          2011,
+          2012
+        ],
+        "game_count": 3697,
+        "passes_every_season": false,
+        "pooled_baseline_relative_log_score": 0.00215791987270452,
+        "seasons": [
+          {
+            "baseline": {
+              "mean_brier": 0.20172086866994482,
+              "mean_log_loss": 0.5886932902789398
+            },
+            "baseline_relative_log_score": 0.003844842282031774,
+            "calendar_block_count": 34,
+            "game_count": 1312,
+            "lower_one_sided_95": 0.0011864375811378287,
+            "model": {
+              "mean_brier": 0.2003500436657435,
+              "mean_log_loss": 0.584848447996908
+            },
+            "passes": true,
+            "season": 2010
+          },
+          {
+            "baseline": {
+              "mean_brier": 0.20219415626533868,
+              "mean_log_loss": 0.5896127839176399
+            },
+            "baseline_relative_log_score": -0.00013163596309824765,
+            "calendar_block_count": 33,
+            "game_count": 1311,
+            "lower_one_sided_95": -0.002889228668215884,
+            "model": {
+              "mean_brier": 0.20227146260355297,
+              "mean_log_loss": 0.5897444198807381
+            },
+            "passes": false,
+            "season": 2011
+          },
+          {
+            "baseline": {
+              "mean_brier": 0.20831054808239216,
+              "mean_log_loss": 0.6042792527423637
+            },
+            "baseline_relative_log_score": 0.002891965961810733,
+            "calendar_block_count": 27,
+            "game_count": 1074,
+            "lower_one_sided_95": -0.00022485774210878392,
+            "model": {
+              "mean_brier": 0.20723838695397076,
+              "mean_log_loss": 0.601387286780553
+            },
+            "passes": false,
+            "season": 2012
+          }
+        ]
+      }
+    }
+  },
+  "features": {
+    "limitations": [
+      "Game times have date granularity, not true publication or tipoff timestamps.",
+      "Road-game counts are a travel proxy; the source has no arena, mileage, or time zone.",
+      "The source has no injuries, expected lineups, rosters, or player-level data.",
+      "Rolling metrics are limited to prior game results, margins, and pregame Elo ratings."
+    ],
+    "names": [
+      "venue_adjusted_elo_log_odds",
+      "rest_days_difference",
+      "back_to_back_difference",
+      "games_last_7_difference",
+      "road_games_last_7_difference",
+      "trailing_10_win_rate_difference",
+      "trailing_10_margin_difference",
+      "trailing_10_opponent_elo_difference",
+      "trailing_10_history_difference"
+    ],
+    "scaling": "training-cohort root mean square without mean centering",
+    "season_reset": true,
+    "side_swap_antisymmetric": true,
+    "state_update": "whole-date batches using strictly earlier game dates"
+  },
+  "outputs": {
+    "nba_historical_test_answers.jsonl": "e196523b3bd7b768a5e8d985b31af0e58db0a79b5d1c768b6931a707e82779e4",
+    "nba_historical_test_prompts.jsonl": "a0efa6aaf138e3c35c719e43dfbf17aa4a8ea4cf020f31ec826edf1ac5cf1f7e",
+    "nba_train_outcome.jsonl": "ec6d2daa6ec5301ca18a1d382a473230fae8145958f33202f0f357ad44355ce7",
+    "nba_validation_answers.jsonl": "a603a69b18f7db8f5baace8e87467ca90e1b9c4c22f2285e200b3b99dc02e89d",
+    "nba_validation_prompts.jsonl": "d5312b03baeb1db1614d26ca4e88d31dda6f63e2673eb5730b3a1c537a14afd8"
+  },
+  "rl": {
+    "gate": "First clear raw and recalibrated Elo on every frozen season, then define real sequential evidence actions, retrieval costs, stopping, and a prospective cohort.",
+    "paid_tinker_job_launched": false,
+    "ready": false,
+    "reward": "Elo-relative realized-outcome log score minus tool cost and optional KL"
+  },
+  "schema_version": 1,
+  "source": {
+    "eligible_games": 59004,
+    "license": "CC BY 4.0",
+    "license_url": "https://github.com/fivethirtyeight/data/blob/master/LICENSE",
+    "name": "FiveThirtyEight historical NBA Elo",
+    "page": "https://github.com/fivethirtyeight/data/tree/master/nba-elo",
+    "sha256": "d46ed3540ee8d9eca31b3e94cc8c777e0be5156173d814ebf65b8195e8d616bc",
+    "url": "https://raw.githubusercontent.com/fivethirtyeight/data/6d880e939ad3d11d94c137c911681b3cf718fd74/nba-elo/nbaallelo.csv"
+  },
+  "splits": {
+    "historical_test": {
+      "original_games": 3944,
+      "seasons": [
+        2013,
+        2014,
+        2015
+      ]
+    },
+    "train": {
+      "original_games": 51359,
+      "side_swapped_training_rows": 102718,
+      "through_season": 2009
+    },
+    "validation": {
+      "original_games": 3697,
+      "seasons": [
+        2010,
+        2011,
+        2012
+      ]
+    }
+  },
+  "tabular_models": {
+    "development": {
+      "feature_scales": [
+        1.0355177247279703,
+        1.2719384615268963,
+        0.5538963304465055,
+        0.9968407425237664,
+        1.4393100930228386,
+        0.308403907042868,
+        8.717745535898564,
+        47.19469275089829,
+        0.43608617060408794
+      ],
+      "recalibrated_elo": {
+        "feature_names": [
+          "venue_adjusted_elo_log_odds"
+        ],
+        "weights": [
+          0.009536810268035007
+        ]
+      },
+      "rich": {
+        "feature_names": [
+          "venue_adjusted_elo_log_odds",
+          "rest_days_difference",
+          "back_to_back_difference",
+          "games_last_7_difference",
+          "road_games_last_7_difference",
+          "trailing_10_win_rate_difference",
+          "trailing_10_margin_difference",
+          "trailing_10_opponent_elo_difference",
+          "trailing_10_history_difference"
+        ],
+        "weights": [
+          -0.023746754093810524,
+          -0.0266702355797732,
+          -0.12549816583201842,
+          -0.03902318167293947,
+          0.02025302352721595,
+          -0.09169239183412191,
+          0.12313385371685558,
+          -0.013142323858963351,
+          0.017596311509759714
+        ]
+      }
+    },
+    "development_fit_through_season": 2009,
+    "final": {
+      "feature_scales": [
+        1.0387285934254868,
+        1.2640664511904758,
+        0.554023485664488,
+        0.9877831922997214,
+        1.4370383405098561,
+        0.3091847829665849,
+        8.740858677906173,
+        47.51697346545239,
+        0.43044636645809614
+      ],
+      "recalibrated_elo": {
+        "feature_names": [
+          "venue_adjusted_elo_log_odds"
+        ],
+        "weights": [
+          0.005076684218279735
+        ]
+      },
+      "rich": {
+        "feature_names": [
+          "venue_adjusted_elo_log_odds",
+          "rest_days_difference",
+          "back_to_back_difference",
+          "games_last_7_difference",
+          "road_games_last_7_difference",
+          "trailing_10_win_rate_difference",
+          "trailing_10_margin_difference",
+          "trailing_10_opponent_elo_difference",
+          "trailing_10_history_difference"
+        ],
+        "weights": [
+          -0.030295341243229152,
+          -0.02712201045617945,
+          -0.12804141929136872,
+          -0.03376288276892595,
+          0.018178283286310378,
+          -0.08947293406083374,
+          0.12549292405724613,
+          -0.01143645653104941,
+          0.014956650447240415
+        ]
+      }
+    },
+    "final_fit_through_season": 2012,
+    "intercept": false,
+    "objective": "mean winner cross-entropy with an Elo log-odds offset",
+    "recalibration_fit_config": {
+      "l2_penalty": 0.0,
+      "learning_rate": 0.1,
+      "steps": 1000
+    },
+    "rich_fit_config": {
+      "l2_penalty": 0.01,
+      "learning_rate": 0.1,
+      "steps": 1000
+    }
+  }
+}
