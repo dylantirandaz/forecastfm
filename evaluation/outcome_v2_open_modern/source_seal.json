@@ -1,4 +1,11 @@
 {
+  "claim": {
+    "classification": "protocol_frozen_historical_holdout",
+    "exposure_record": "EXPOSURE.md",
+    "exposure_record_sha256": "ca4e036989f700fc94a0e367f1754cdd807d4df232450adcd73ddaef9e8c5c5e",
+    "known_test_label_exposures": 1,
+    "literally_unopened": false
+  },
   "development": {
     "filename": "development.csv",
     "ordered_ids_sha256": "5befb0fe1dc497826384ac1c05852f3c5ce13d00b5cc0f4a879564456baf1a1a",
@@ -33,7 +40,35 @@
     "test_labels_written": false,
     "test_metrics_computed": false
   },
-  "schema_version": 1,
+  "schema_version": 2,
+  "selection_splits": {
+    "train": {
+      "ordered_ids_sha256": "f52d201bfe90cf88c1046275584ad197a7d7b880f54b5bd5b2f5c3007163649c",
+      "row_count": 5249,
+      "season_counts": {
+        "2016": 1316,
+        "2017": 1309,
+        "2018": 1312,
+        "2019": 1312
+      },
+      "seasons": [
+        2016,
+        2017,
+        2018,
+        2019
+      ]
+    },
+    "validation": {
+      "ordered_ids_sha256": "63216edec7012648bf886471dca23304b213ae35624a7da1601e9eac73558a98",
+      "row_count": 1143,
+      "season_counts": {
+        "2020": 1143
+      },
+      "seasons": [
+        2020
+      ]
+    }
+  },
   "source": {
     "byte_size": 655771,
     "commit": "f6d5b2e1d6da2889345d381c41431f9a4ee208dd",
@@ -44,7 +79,7 @@
   },
   "status": "sealed_for_development",
   "test_answers": {
-    "materialized": false,
+    "answer_artifact_written": false,
     "ordered_ids_sha256": "74fffad360eaa74d80f2a8f7f838173cee21658c8967b0adb2312ef3f3b76afb",
     "row_count": 2494,
     "sha256": "dae7df7f96a7b6cff4624049316cddfd3946753bc8005cdac19f7a698ae886be"

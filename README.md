@@ -259,6 +259,19 @@ Elo-relative log score is positive (`+0.000884`), but only 2014 passes independe
 confidence bound crosses zero, and 2015 has negative mean improvement. The checked-in
 `outcome_v2` manifest therefore marks both raw- and recalibrated-Elo gates false and RL not ready.
 
+### Open-modern historical lane
+
+A separate protocol-frozen historical lane extends the diagnostic through 2022. It is not a
+literally unopened test: one 2022 label was accidentally exposed and is retained in the committed
+exposure record. The model inputs are pregame source probabilities, game dates, team identities
+and prior matchup schedule, and possession-weighted RAPTOR from the completed prior season.
+
+The experiment fits one predeclared full residual forecast with an L2 penalty of `0.01` and a
+fixed source-probability recalibration baseline on 2016–2019. The 2020 validation season is used
+only for the advancement gate, never for candidate or hyperparameter selection. If that gate
+passes, subsequent 2021–2022 holdout inference must use the locked weights in one fixed full-file
+pass without adaptive updates.
+
 ### When RL becomes useful
 
 RL is gated on the tabular and supervised ForecastFM corrections first clearing the multi-season
@@ -337,6 +350,9 @@ is not used by this workflow.
 - `elo_residual.py`: dependency-free cross-entropy correction to Elo log-odds.
 - `outcome_v2_metrics.py`: strict per-season Elo-relative scores and block-bootstrap gate.
 - `outcome_v2_preflight.py`: offline full-data, rights, hash, pair, and batch-coverage gate.
+- `open_modern.py`: pinned source sealing and mandatory development/holdout hash verification.
+- `open_modern_features.py`: outcome-free causal schedule and completed-prior-season RAPTOR inputs.
+- `open_modern_model.py`: one predeclared residual forecast, fixed recalibration, and gate metrics.
 - `serialization.py`: strict, readable JSONL input and output.
 - `prompting.py`: the model prompt and strict prediction parser.
 - `tinker_data.py`: screened SFT conversation export without SDK coupling.

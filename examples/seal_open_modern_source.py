@@ -15,13 +15,16 @@ SEAL_PATH = PROJECT_ROOT / "evaluation/outcome_v2_open_modern/source_seal.json"
 
 def main() -> None:
     """Create target-free test inputs without printing any test answers."""
-    result = seal_open_modern_source(
-        SOURCE_PATH,
-        DEVELOPMENT_PATH,
-        TEST_INPUTS_PATH,
-        PROTOCOL_PATH,
-        SEAL_PATH,
-    )
+    try:
+        result = seal_open_modern_source(
+            SOURCE_PATH,
+            DEVELOPMENT_PATH,
+            TEST_INPUTS_PATH,
+            PROTOCOL_PATH,
+            SEAL_PATH,
+        )
+    finally:
+        SOURCE_PATH.unlink(missing_ok=True)
     print(
         f"Sealed {result.development_count} development rows and "
         f"{result.test_input_count} target-free test inputs."

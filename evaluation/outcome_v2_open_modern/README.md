@@ -9,3 +9,25 @@ This lane is rights-clean and useful, but partial. It can extend the real diagno
 2022 season and add lagged CC-BY RAPTOR features. It cannot supply exact tipoff/publication times,
 historical lineup revisions, injuries, or a prospective claim. The full-data and RL gates remain
 closed regardless of its result.
+
+`source_seal.json` binds the exact source bytes, exposure record, chronological split, row counts,
+and ordered IDs. The sealer writes labeled 2016–2020 development data plus label-free 2021–2022
+inputs, then its CLI deletes the temporary all-answer source even when sealing fails. Downstream
+loaders refuse any artifact whose committed hash, schema, row count, or ID order differs.
+
+The validation experiment uses pregame source probabilities, game dates, team identities and
+prior matchup schedule, and possession-weighted regular-season RAPTOR from the fully completed
+prior season. Its feature code never reads an outcome field. One predeclared full residual
+forecast with an L2 penalty of `0.01`, a fixed source-probability recalibration baseline, the
+scoring rules, bootstrap, and side-swap gate must be committed and pushed before running. Both
+models fit on 2016–2019; 2020 is used only for the advancement gate, never for candidate or
+hyperparameter selection:
+
+```bash
+uv run python -m examples.run_open_modern_development
+```
+
+That command requires a clean Git tree and exclusively creates `validation_lock.json`; it cannot
+overwrite or reopen a prior result. A failed validation gate leaves the historical holdout closed.
+If the gate passes, subsequent 2021–2022 holdout inference uses the locked weights in one fixed
+full-file pass without row-wise or other adaptive model updates.
