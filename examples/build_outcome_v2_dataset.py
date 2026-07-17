@@ -478,10 +478,16 @@ def _manifest(build: _Build) -> dict[str, object]:
                 "at the frozen worst-case realized probability."
             ),
             "full_outcome_v2_ready": False,
+            "untouched_evaluation_seasons": [],
             "full_outcome_v2_missing": [
                 "licensed point-in-time travel data",
                 "licensed timestamped availability and expected-lineup data",
                 "roster and player-level rolling metrics",
+                (
+                    "reviewed production connector deriving features and final scores from "
+                    "retained raw bytes"
+                ),
+                "deterministic Elo replay from strictly prior resolved games",
                 "signed source terms explicitly allowing Tinker processing",
                 "at least two prospectively frozen evaluation seasons",
             ],

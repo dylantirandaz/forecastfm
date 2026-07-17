@@ -20,12 +20,15 @@
       "licensed point-in-time travel data",
       "licensed timestamped availability and expected-lineup data",
       "roster and player-level rolling metrics",
+      "reviewed production connector deriving features and final scores from retained raw bytes",
+      "deterministic Elo replay from strictly prior resolved games",
       "signed source terms explicitly allowing Tinker processing",
       "at least two prospectively frozen evaluation seasons"
     ],
     "full_outcome_v2_ready": false,
     "historical_gate_passes_raw_elo": false,
     "historical_gate_passes_recalibrated_elo": false,
+    "untouched_evaluation_seasons": [],
     "historical_test": {
       "recalibrated_vs_raw_elo": {
         "baseline": "raw_elo",
@@ -442,7 +445,7 @@
         "unavailable_rotation_value"
       ],
       "missing_policy": "Reject a game with any missing required source value; use a stated default only for a genuine no-history state.",
-      "sha256": "016bfad21e28389486aa9545ae2aba372e247f8682e915d13cdfd377f35fc9a8",
+      "sha256": "b28c6d0be600091182b1030fa747731e0f9a18dc66a1d680211049f113937642",
       "standard_names": [
         "rest_days",
         "back_to_back",
@@ -453,10 +456,10 @@
         "roster_continuity",
         "expected_lineup_continuity",
         "rolling_team_net_rating",
-        "rolling_rotation_value",
+        "rolling_player_value",
         "schedule_strength"
       ],
-      "version": 1
+      "version": 2
     },
     "limitations": [
       "Game times have date granularity, not true publication or tipoff timestamps.",

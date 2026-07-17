@@ -112,8 +112,10 @@ class SourceSnapshot:
     """One immutable raw-source snapshot retained outside model-facing data."""
 
     source_id: str
+    rights_scope: str
     source_url: str
     payload_sha256: str
+    snapshot_metadata_sha256: str
     published_at: datetime
     retrieved_at: datetime
     capture_method: CaptureMethod
@@ -124,8 +126,10 @@ class SourceSnapshot:
 
     def __post_init__(self) -> None:
         _require_text(self.source_id, "source_id")
+        _require_text(self.rights_scope, "rights_scope")
         _require_text(self.source_url, "source_url")
         _require_sha256(self.payload_sha256, "payload_sha256")
+        _require_sha256(self.snapshot_metadata_sha256, "snapshot_metadata_sha256")
         _require_utc(self.published_at, "published_at")
         _require_utc(self.retrieved_at, "retrieved_at")
         if self.published_at > self.retrieved_at:
@@ -477,8 +481,10 @@ def _source_payload(source: SourceSnapshot) -> dict[str, object]:
     rights = source.rights
     return {
         "source_id": source.source_id,
+        "rights_scope": source.rights_scope,
         "source_url": source.source_url,
         "payload_sha256": source.payload_sha256,
+        "snapshot_metadata_sha256": source.snapshot_metadata_sha256,
         "published_at": _utc_text(source.published_at),
         "retrieved_at": _utc_text(source.retrieved_at),
         "capture_method": source.capture_method,

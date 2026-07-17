@@ -61,8 +61,10 @@ def make_source(
         archive_attestation_sha256 = "c" * 64
     return SourceSnapshot(
         source_id=source_id,
+        rights_scope="provider-test:nba:team-metrics",
         source_url=f"https://provider.test/snapshots/{source_id}",
         payload_sha256="b" * 64,
+        snapshot_metadata_sha256="d" * 64,
         published_at=PUBLISHED_AT,
         retrieved_at=retrieved_at,
         capture_method=capture_method,
@@ -383,6 +385,10 @@ def test_bundle_hash_is_deterministic_and_sensitive_to_bound_inputs() -> None:
     changed_rights = replace(bundle.sources[0].rights, redistribution="unknown")
     changed_source = replace(bundle.sources[0], rights=changed_rights)
     changed_lineage = replace(bundle, sources=(changed_source,))
+    changed_snapshot_identity = replace(
+        bundle,
+        sources=(replace(bundle.sources[0], snapshot_metadata_sha256="e" * 64),),
+    )
     changed_matchup = replace(bundle, game=replace(bundle.game, matchup="Changed matchup"))
     changed_question = replace(bundle, question=replace(bundle.question, text="Changed question"))
 
@@ -390,5 +396,6 @@ def test_bundle_hash_is_deterministic_and_sensitive_to_bound_inputs() -> None:
     assert evidence_bundle_sha256(bundle) == original
     assert evidence_bundle_sha256(changed_evidence) != original
     assert evidence_bundle_sha256(changed_lineage) != original
+    assert evidence_bundle_sha256(changed_snapshot_identity) != original
     assert evidence_bundle_sha256(changed_matchup) != original
     assert evidence_bundle_sha256(changed_question) != original

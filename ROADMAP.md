@@ -56,10 +56,29 @@ final claim.
 
 ## 5. Leakage-safe outcome v2 — in progress
 
+- Acquire either a signed SportsDataIO production Vault + Leagues agreement or a buyer-owned
+  licensed snapshot pack; no modern source is currently cleared.
+- Preserve one simple path: immutable raw snapshot pack -> cutoff-causal evidence bundle ->
+  target-free model rows -> separately sealed resolutions.
+- The provider-neutral snapshot, canonical evidence-bundle, and sealed T-60 row boundaries now
+  exist locally. The paid preflight now binds snapshots, evidence, rows, Elo states, seasons,
+  resolutions, rights, and exact artifact hashes end to end. A production connector still must
+  derive every feature and final score from licensed raw bytes before readiness can become true.
+- Separate per-entity source IDs from stable licensed rights scopes, and bind evidence to the full
+  snapshot-metadata digest so live version and effective-time identity cannot be discarded.
+- Treat `available_at` as knowledge time: retrieval for live captures and provider publication for
+  attested archives. Permit future `effective_at` values without treating them as prior knowledge.
+- Use T-60 as the primary supervised state and retain optional T-6h and T-15m states separately.
 - Derive rest, back-to-back, recent schedule load, road-game load, rolling form, and schedule
-  strength from the pinned real history.
+  strength from licensed real history.
 - Reset state by season and batch all same-date games before updating history.
 - Express every feature as an oriented difference with an exact side swap.
+- Freeze the 11 standard rest/load/travel/roster/lineup/team/player/schedule features; keep the two
+  player-health-derived availability features local-only and outside standard Tinker exports.
+- Compute Elo in-house from strictly prior outcomes under a frozen recipe or use a license-cleared
+  pregame Elo source.
+- The current Elo-state seal recomputes each prior from frozen ratings and recipe inputs; add a
+  deterministic historical replay before treating those ratings as independently verified.
 - Fit a readable cross-entropy logistic correction to Elo before paying for another fine-tune.
 - Train ForecastFM on the same realized winner and fixed candidate-token probability contract.
 - Compare against raw Elo and an Elo recalibration fitted only on training data.
@@ -74,11 +93,17 @@ final claim.
   rolling-player, and schedule-strength feature schema.
 - Refuse outcome-v2 SFT offline unless the full-data, upload-rights, artifact-hash,
   side-swap-pair, and exact batch-coverage gates all pass.
+- Treat `full_outcome_v2_ready` as a summary, not authority: preflight also requires an empty
+  missing-data list, wins over raw and training-only-recalibrated Elo, and at least two named
+  untouched evaluation seasons.
+- Bind any readiness-true SFT run to the exact reviewed agreement bytes, rights lock, and sealed
+  target-free row file; never authorize upload from manifest permission strings alone.
 
-The current source has date-only timestamps and no true travel, injury, expected-lineup, roster,
-or player-level data. Existing historical answers are contamination-prone. This milestone does not
-claim that outcome v2 beats Elo; a prospective cohort is still required for a truly untouched
-result.
+The current repository has no licensed modern snapshot pack or production connector. Existing open
+sources have date-only timestamps and lack the full travel, availability, expected-lineup, roster,
+and rolling-player contract. Existing historical answers are contamination-prone. This milestone
+does not claim that outcome v2 beats Elo; multiple untouched chronological seasons and a prospective
+cohort are still required.
 
 The first historical run failed the conjunction gate: pooled Elo-relative log score was positive,
 but 2013 was inconclusive and 2015 was negative. The failure is preserved in
@@ -108,7 +133,9 @@ not substitute for licensed lineups, injuries, exact timestamps, or prospective 
 
 ## 8. NBA domain pack
 
-- Define a buyer-owned-data connector interface. — complete
+- Keep the provider-neutral connector contract; add a production connector only after its license
+  and exact snapshot semantics pass review.
+- Accept a buyer-owned licensed snapshot pack as the vendor-independent fallback.
 - Keep restricted or buyer-licensed rows outside the redistributable core.
 - Exclude player health and injury information from standard Tinker uploads.
 - Compare numeric-only, ForecastFM-only, hybrid, and market-aware forecasts.
