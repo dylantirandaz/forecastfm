@@ -1,0 +1,185 @@
+{
+  "code_sha256": {
+    "evaluation/outcome_v2_open_modern/EXPOSURE.md": "ca4e036989f700fc94a0e367f1754cdd807d4df232450adcd73ddaef9e8c5c5e",
+    "evaluation/outcome_v2_open_modern/protocol.json": "36bed36f546e1a7f9fe6dbc6f9c3582f1a41746cbee738ed89f92918cacf6aae",
+    "evaluation/outcome_v2_open_modern/source_seal.json": "b5871f4139882b7333b07b843d7d511b41d47bb476cd689ee0fd9b73deaab265",
+    "examples/run_open_modern_development.py": "419a1e6ab96eb42d4c1e7a2221d80f9b18bde01c66220cd7f7c69af97f1c7fe9",
+    "pyproject.toml": "6b0f8bf46cb3573250d5aebe539714116722a3757af241e766a0d0c2f015fea4",
+    "src/forecastfm/elo_residual.py": "783bef6efa18230ad2ece9e31dbb4f0eb6938d3270cebb1c263fdc23f64caa4c",
+    "src/forecastfm/integrity.py": "6ff6746d4922b127155ef9a3642f2ae0c4464a09e3cbafb3505edc8111fc81f5",
+    "src/forecastfm/open_modern.py": "4ce842c87870ac377283a2a2ae8b256fd15e0fb54a2b86999fefae6a5080aa08",
+    "src/forecastfm/open_modern_features.py": "a6d3190cfb1f479c0a59556aaf82bba78a9b3f12d482c0d674d554ef0f3ea235",
+    "src/forecastfm/open_modern_model.py": "83697d8471430a7a05b8f200a4d166f78cc9757ed031dce3b3a9e64cd0d9ff32",
+    "src/forecastfm/publication.py": "d59393b4496b6cc96dbaba239332e54243243e911ecb0f368f0de2c930e8194b",
+    "tests/test_open_modern.py": "00f13a39048b006fdc555f1c3c9c16916efa13a75b591d88ae4fe153b8c2461e",
+    "tests/test_open_modern_features.py": "5b724ce4609339b461da89e2ce89d5951c4c2c7bb80e42b231ed61cb801c1313",
+    "tests/test_open_modern_model.py": "42a3399f2cc170ae6142c0302ab14a0ef02b56d5002e124c04541aad23da708a",
+    "tests/test_run_open_modern_development.py": "18f37ed580551cd1eb5468c9a6300ebe03c59f624ae2a0c4c09149610c590f83",
+    "uv.lock": "3edf0756f7d82977313fed2c7d452be5138f4a6ef7543a47c6b784b963a6deb5"
+  },
+  "contracts": {
+    "causal_features_sha256": "7c41ea294d5aa298053753b47a7e6fd5e218515ebe18820121429fa84a1f4ba4",
+    "model_contract_sha256": "f6a363ecf1d0b16a425eea7c55ae026153f514a6584ed18be8a7131b737a528d"
+  },
+  "evaluation_policy": {
+    "bootstrap_block_days": 7,
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 20260716,
+    "ece_bin_count": 10,
+    "maximum_side_swap_gap": 1e-12,
+    "one_sided_alpha": 0.05,
+    "primary_metric": "mean log loss"
+  },
+  "fit": {
+    "feature_names": [
+      "source_log_odds",
+      "rest_days_difference",
+      "back_to_back_difference",
+      "games_last_7_difference",
+      "trailing_10_opponent_probability_difference",
+      "trailing_10_history_difference",
+      "prior_season_raptor_total_difference"
+    ],
+    "forecast_l2_penalty": 0.01,
+    "learning_rate": 0.1,
+    "scaler": {
+      "kind": "training_only_uncentered_rms",
+      "scales": [
+        1.172852051646263,
+        1.0095750394771563,
+        0.5090156882175546,
+        0.8150564475938682,
+        0.21217846003677393,
+        0.28219535084963876,
+        1.6292322027724189
+      ],
+      "sha256": "9047a8306399f9a841913f420fec415266e77d5090d51ed6ec6ce093808e5237"
+    },
+    "steps": 1000
+  },
+  "git_revision": "df07af48dcec52dd708606843b9729353d85cce1",
+  "holdout": {
+    "answers_opened_for_scoring": false,
+    "inference_policy": "use the locked forecast weights in one fixed chronological full-file pass; never fit or adapt row by row",
+    "ordered_ids_sha256": "74fffad360eaa74d80f2a8f7f838173cee21658c8967b0adb2312ef3f3b76afb",
+    "predictions_written": false,
+    "row_count": 2494,
+    "scored": false,
+    "seasons": [
+      2021,
+      2022
+    ],
+    "target_free_inputs_sha256": "e92bab54ce46d2cb38de2969e529092bad607394528a68faf0a58231b089b0ed"
+  },
+  "inputs": {
+    "development_ordered_ids_sha256": "5befb0fe1dc497826384ac1c05852f3c5ce13d00b5cc0f4a879564456baf1a1a",
+    "development_sha256": "02baf591b285f0537088b2fa05dfc0b98020b2a04a7441ee0eb7061a75881690",
+    "exposure_sha256": "ca4e036989f700fc94a0e367f1754cdd807d4df232450adcd73ddaef9e8c5c5e",
+    "protocol_sha256": "36bed36f546e1a7f9fe6dbc6f9c3582f1a41746cbee738ed89f92918cacf6aae",
+    "raptor": {
+      "commit": "4c1ff5e3aef1816ae04af63218015066e186c147",
+      "git_blob_sha": "7e9f47d175de2a0f86b04bfd175597477c6ae26d",
+      "maximum_allowed_season": 2019,
+      "sha256": "a80bb5d24eb6b9742bb0c68aacf643144e7d39311b3b5aa12199b63d8d7de2aa"
+    },
+    "source_seal_sha256": "b5871f4139882b7333b07b843d7d511b41d47bb476cd689ee0fd9b73deaab265",
+    "training_source_ordered_ids_sha256": "f52d201bfe90cf88c1046275584ad197a7d7b880f54b5bd5b2f5c3007163649c",
+    "validation_source_ordered_ids_sha256": "63216edec7012648bf886471dca23304b213ae35624a7da1601e9eac73558a98"
+  },
+  "schema_version": 1,
+  "status": "validation_failed_holdout_closed",
+  "training": {
+    "ordered_ids_sha256": "50903cb4b4c7de0f4cc986bb1f1517a5db9fe592934a1513406016008534f4d9",
+    "row_count": 5249,
+    "rows_sha256": "e56399074c3147a49530a876c02fd614f078cbc645617ba665abf7bd777f0702",
+    "seasons": [
+      2016,
+      2017,
+      2018,
+      2019
+    ]
+  },
+  "validation": {
+    "advances_to_holdout": false,
+    "forecast": {
+      "candidate_id": "full-l2-0.01",
+      "feature_names": [
+        "source_log_odds",
+        "rest_days_difference",
+        "back_to_back_difference",
+        "games_last_7_difference",
+        "trailing_10_opponent_probability_difference",
+        "trailing_10_history_difference",
+        "prior_season_raptor_total_difference"
+      ],
+      "l2_penalty": 0.01,
+      "metrics": {
+        "count": 1143,
+        "expected_calibration_error": 0.030914209684204875,
+        "mean_brier": 0.21712540999631968,
+        "mean_log_loss": 0.6242271483690532
+      },
+      "model_sha256": "ba1e903ed4f8c97bde0734667a87b01adfc51112f49abe4eabe78fca240c9e11",
+      "name": "full",
+      "validation_forecasts_sha256": "27d70a7404492a6452d609ca04dfce180f0ba0aa05f67a3c8ebc4c861d4cae12",
+      "weights": [
+        -0.35439971701132394,
+        -0.015075912068332083,
+        -0.024497762633552363,
+        -0.058331059494234394,
+        -0.08185410253051464,
+        0.032280540803406955,
+        0.14211972594598216
+      ]
+    },
+    "forecast_vs_raw_source": {
+      "baseline_name": "raw_source_probability",
+      "calendar_block_count": 32,
+      "game_count": 1143,
+      "lower_one_sided_95": 0.004729513641017594,
+      "mean_baseline_relative_log_score": 0.012094538423146265
+    },
+    "forecast_vs_recalibration": {
+      "baseline_name": "fixed_training_recalibration",
+      "calendar_block_count": 32,
+      "game_count": 1143,
+      "lower_one_sided_95": -0.0021729170668583833,
+      "mean_baseline_relative_log_score": 0.004106024128280011
+    },
+    "gate_failures": [
+      "non-positive lower bound versus fixed_training_recalibration"
+    ],
+    "maximum_side_swap_gap": 2.220446049250313e-16,
+    "ordered_ids_sha256": "6e05ee34d282a0ee770e4b6b8c57820c21306dbf5aadfe08d07bd63ac112a952",
+    "raw_source_metrics": {
+      "count": 1143,
+      "expected_calibration_error": 0.06188811249000451,
+      "mean_brier": 0.2216212069985529,
+      "mean_log_loss": 0.6363216867921995
+    },
+    "recalibration": {
+      "candidate_id": "recalibration-l2-0",
+      "feature_names": [
+        "source_log_odds"
+      ],
+      "l2_penalty": 0.0,
+      "metrics": {
+        "count": 1143,
+        "expected_calibration_error": 0.04619870996386898,
+        "mean_brier": 0.2191057598504493,
+        "mean_log_loss": 0.6283331724973332
+      },
+      "model_sha256": "28afbfff82523f36549dc79de22b534f0ce59e3067e3dab504abe24632898cf3",
+      "name": "recalibration",
+      "validation_forecasts_sha256": "60e63da81aafbe1f80ae8c329c2160bf5b2f19ae58f4566d5e20fa305fd2dedb",
+      "weights": [
+        -0.22989631168824526
+      ]
+    },
+    "row_count": 1143,
+    "rows_sha256": "f8674afbaf552fa672717308366a237532a534218548b612f3e70033820a9850",
+    "seasons": [
+      2020
+    ]
+  }
+}

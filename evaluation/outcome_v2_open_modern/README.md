@@ -31,3 +31,22 @@ That command requires a clean Git tree and exclusively creates `validation_lock.
 overwrite or reopen a prior result. A failed validation gate leaves the historical holdout closed.
 If the gate passes, subsequent 2021–2022 holdout inference uses the locked weights in one fixed
 full-file pass without row-wise or other adaptive model updates.
+
+## Frozen validation result
+
+The first and only run of the published experiment at commit
+`df07af48dcec52dd708606843b9729353d85cce1` produced:
+
+| 2020 forecast | Log loss | Brier | 10-bin ECE |
+| --- | ---: | ---: | ---: |
+| Raw source probability | 0.636322 | 0.221621 | 0.061888 |
+| Training-only recalibration | 0.628333 | 0.219106 | 0.046199 |
+| Fixed full residual forecast | 0.624227 | 0.217125 | 0.030914 |
+
+The full forecast's mean baseline-relative log score was `+0.012095` versus the raw source, with
+a one-sided 95% calendar-block bootstrap lower bound of `+0.004730`. Versus the fixed
+recalibration, its mean improvement was `+0.004106`, but the lower bound was `-0.002173`.
+Therefore the gate failed only on statistical confidence versus recalibration. The immutable lock
+is `validation_lock.json` (SHA-256
+`1bb18b55305e561943ae294859ff7a8d633554282ed7309be588d2ff3fe1c7fd`), and no 2021–2022
+predictions or scores were produced.

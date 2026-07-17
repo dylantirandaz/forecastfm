@@ -272,6 +272,11 @@ only for the advancement gate, never for candidate or hyperparameter selection. 
 passes, subsequent 2021–2022 holdout inference must use the locked weights in one fixed full-file
 pass without adaptive updates.
 
+The frozen 2020 run improved log loss from `0.636322` for the raw source and `0.628333` for its
+training-only recalibration to `0.624227`. It cleared the confidence gate versus the raw source,
+but not versus recalibration, so `validation_lock.json` records
+`validation_failed_holdout_closed`; no 2021–2022 prediction or scoring was run.
+
 ### When RL becomes useful
 
 RL is gated on the tabular and supervised ForecastFM corrections first clearing the multi-season
