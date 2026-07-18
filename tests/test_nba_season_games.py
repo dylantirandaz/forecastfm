@@ -58,6 +58,7 @@ def _pbp_game(
             stats(home, home_score, (11, 12, 13, 14, 15)),
         ),
         player_lines=lines,
+        player_names={line.player_id: f"Player {line.player_id}" for line in lines},
     )
 
 

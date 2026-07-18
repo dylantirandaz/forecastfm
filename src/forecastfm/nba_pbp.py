@@ -83,6 +83,7 @@ class PbpGame:
     home_score: int
     team_stats: tuple[TeamGameStats, TeamGameStats]
     player_lines: tuple[PlayerGameLine, ...]
+    player_names: dict[int, str]
 
     @property
     def season_label(self) -> int:
@@ -128,6 +129,7 @@ class _GameBuilder:
         self.period_participants: dict[str, set[int]] = {}
         self.period_first_sub: dict[int, str] = {}
         self.period_event_counts: dict[int, int] = {}
+        self.player_names: dict[int, str] = {}
 
 
 def read_pbp_games(path: Path, failures: list[str] | None = None) -> Iterator[PbpGame]:
@@ -209,11 +211,13 @@ def _consume(builder: _GameBuilder, record: list[str]) -> None:
 
 def _observe_period(builder: _GameBuilder, record: list[str]) -> None:
     _learn_sides(builder, record)
-    for player_id, team_abbr in _participants(record):
+    for player_id, team_abbr, player_name in _participants(record):
         builder.teams.setdefault(team_abbr, _TeamState(abbreviation=team_abbr))
         builder.period_participants.setdefault(team_abbr, set()).add(player_id)
         builder.player_team.setdefault(player_id, team_abbr)
         builder.period_event_counts[player_id] = builder.period_event_counts.get(player_id, 0) + 1
+        if player_name:
+            builder.player_names.setdefault(player_id, player_name)
     if int(record[2]) == 8:
         team_abbr = record[18]
         if team_abbr:
@@ -419,6 +423,7 @@ def _finalize(builder: _GameBuilder) -> PbpGame:
         home_score=builder.home_score,
         team_stats=team_stats,
         player_lines=player_lines,
+        player_names=dict(builder.player_names),
     )
 
 
@@ -476,12 +481,12 @@ def _opponent(builder: _GameBuilder, team_abbr: str) -> str:
     return builder.away_abbreviation
 
 
-def _participants(record: list[str]) -> list[tuple[int, str]]:
-    participants: list[tuple[int, str]] = []
-    for id_index, team_index in ((13, 18), (20, 25), (27, 32)):
+def _participants(record: list[str]) -> list[tuple[int, str, str]]:
+    participants: list[tuple[int, str, str]] = []
+    for id_index, name_index, team_index in ((13, 14, 18), (20, 21, 25), (27, 28, 32)):
         raw_id, team_abbr = record[id_index].strip(), record[team_index].strip()
         if raw_id and raw_id != "0" and team_abbr:
-            participants.append((int(raw_id), team_abbr))
+            participants.append((int(raw_id), team_abbr, record[name_index].strip()))
     return participants
 
 
