@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from datetime import date
 from pathlib import Path
 
 from forecastfm.elo_residual import EloResidualFitConfig, EloResidualModel, fit_elo_residual
@@ -108,7 +107,7 @@ def _build_season(
     season: int,
     filename: str,
     schedule: list[ScheduleEntry],
-    injury_index: dict[date, list[InjurySnapshot]],
+    injury_snapshots: list[InjurySnapshot],
 ) -> tuple[list[PrototypeGameRow], list[str]]:
     failures: list[str] = []
     games = list(read_pbp_games(PBP_DIR / filename, failures))
@@ -117,7 +116,7 @@ def _build_season(
     replay_rows, resolutions = build_replay_inputs(joined, f"shufinskiy:{filename}")
     states = list(replay_nba_elo_states(replay_rows, resolutions, PROTOTYPE_ELO_RECIPE))
     ratings = elo_ratings_by_game(states, joined)
-    features, feature_notes = build_game_features(joined, ratings, injury_index)
+    features, feature_notes = build_game_features(joined, ratings, injury_snapshots)
     rows = build_prototype_rows(joined, features, states)
     return rows, failures + join_notes + feature_notes
 

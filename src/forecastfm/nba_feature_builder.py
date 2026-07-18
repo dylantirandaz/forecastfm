@@ -15,14 +15,13 @@ import json
 import unicodedata
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from forecastfm.nba_injury_report import (
     UNAVAILABLE_STATUSES,
     InjuryReportRow,
     matchup_teams,
-    select_report_at_cutoff,
 )
 from forecastfm.nba_season_games import SeasonGame
 from forecastfm.nba_team_history import GameContext, NbaTeamHistory, TeamSideFeatures
@@ -97,20 +96,19 @@ def normalize_player_name(name: str) -> tuple[str, ...]:
     return tuple(sorted(token.casefold() for token in tokens))
 
 
-def load_injury_index(archive_root: Path) -> dict[date, list[InjurySnapshot]]:
-    """Load every archived report's rows, grouped by game date and ordered by report time."""
-    index: dict[date, list[InjurySnapshot]] = {}
+def load_injury_index(archive_root: Path) -> list[InjurySnapshot]:
+    """Load every archived report snapshot, ordered by report time.
+
+    Evening reports list games for the following day as well as the same day, so snapshots are
+    indexed by their own report time only; game dates come from each row itself.
+    """
+    snapshots: list[InjurySnapshot] = []
     for rows_path in sorted(archive_root.glob("*/*.rows.jsonl")):
         rows = _read_rows(rows_path)
-        if not rows:
-            continue
-        game_date = rows[0].game_date
-        index.setdefault(game_date, []).append(
-            InjurySnapshot(report_time=rows[0].report_time, rows=rows)
-        )
-    for snapshots in index.values():
-        snapshots.sort(key=lambda snapshot: snapshot.report_time)
-    return index
+        if rows:
+            snapshots.append(InjurySnapshot(report_time=rows[0].report_time, rows=rows))
+    snapshots.sort(key=lambda snapshot: snapshot.report_time)
+    return snapshots
 
 
 def _read_rows(rows_path: Path) -> tuple[InjuryReportRow, ...]:
@@ -133,26 +131,26 @@ def _read_rows(rows_path: Path) -> tuple[InjuryReportRow, ...]:
 
 
 def schedule_from_injury_index(
-    index: Mapping[date, list[InjurySnapshot]],
+    snapshots: Iterable[InjurySnapshot],
 ) -> list[tuple[date, str, str, tuple[int, int]]]:
-    """Extract (date, away, home, clock) schedule entries from the injury index."""
+    """Extract (date, away, home, clock) entries from report rows' own game dates."""
+    seen: set[tuple[date, str, str, tuple[int, int]]] = set()
     schedule: list[tuple[date, str, str, tuple[int, int]]] = []
-    for game_date, snapshots in sorted(index.items()):
-        seen: set[tuple[str, str, tuple[int, int]]] = set()
-        for snapshot in snapshots:
-            for row in snapshot.rows:
-                away, home = matchup_teams(row.matchup)
-                key = (away, home, row.game_clock_et)
-                if key not in seen:
-                    seen.add(key)
-                    schedule.append((game_date, away, home, row.game_clock_et))
+    for snapshot in snapshots:
+        for row in snapshot.rows:
+            away, home = matchup_teams(row.matchup)
+            key = (row.game_date, away, home, row.game_clock_et)
+            if key not in seen:
+                seen.add(key)
+                schedule.append(key)
+    schedule.sort()
     return schedule
 
 
 def build_game_features(
     games: Iterable[SeasonGame],
     elo_ratings: Mapping[tuple[int, str], float],
-    injury_index: Mapping[date, list[InjurySnapshot]],
+    injury_snapshots: list[InjurySnapshot],
 ) -> tuple[list[GameFeatures], list[str]]:
     """Compute per-side features for one season in strict tipoff order.
 
@@ -171,7 +169,7 @@ def build_game_features(
         )
         away_context = GameContext(game.game_date, game.tipoff, False, game.arena)
         home_context = GameContext(game.game_date, game.tipoff, True, game.arena)
-        health = _health_for_game(game, injury_index, away_history, home_history, notes)
+        health = _health_for_game(game, injury_snapshots, away_history, home_history, notes)
         features.append(
             GameFeatures(
                 game_id=game.game_id,
@@ -189,20 +187,28 @@ def build_game_features(
 
 def _health_for_game(
     game: SeasonGame,
-    injury_index: Mapping[date, list[InjurySnapshot]],
+    snapshots: list[InjurySnapshot],
     away_history: NbaTeamHistory,
     home_history: NbaTeamHistory,
     notes: list[str],
 ) -> tuple[tuple[float, float], tuple[float, float]] | None:
-    snapshots = injury_index.get(game.game_date, [])
-    report_time = select_report_at_cutoff(
-        game.tipoff,
-        [snapshot.report_time for snapshot in snapshots],
+    cutoff = game.tipoff - timedelta(minutes=60)
+    selected = next(
+        (
+            snapshot
+            for snapshot in reversed(snapshots)
+            if snapshot.report_time.astimezone(UTC) <= cutoff
+            and any(
+                row.game_date == game.game_date
+                and matchup_teams(row.matchup) == (game.away_abbreviation, game.home_abbreviation)
+                for row in snapshot.rows
+            )
+        ),
+        None,
     )
-    if report_time is None:
+    if selected is None:
         notes.append(f"game {game.game_id} has no report snapshot at or before its T-60 cutoff")
         return None
-    selected = next(snapshot for snapshot in snapshots if snapshot.report_time == report_time)
     away = _side_health(selected.rows, game.away_abbreviation, away_history, game, notes)
     home = _side_health(selected.rows, game.home_abbreviation, home_history, game, notes)
     return (away, home)

@@ -62,11 +62,10 @@ def test_load_injury_index_groups_by_date(tmp_path: Path) -> None:
         "b.rows.jsonl",
         [_row("Smart, Marcus", "Out", report_time="2021-10-19T19:30:00-04:00")],
     )
-    index = load_injury_index(tmp_path)
-    assert sorted(index) == [date(2021, 10, 19)]
-    snapshots = index[date(2021, 10, 19)]
+    snapshots = load_injury_index(tmp_path)
     assert len(snapshots) == 2
     assert snapshots[0].report_time < snapshots[1].report_time
+    assert snapshots[0].rows[0].game_date == date(2021, 10, 19)
 
 
 def _season_game(game_id: int, day: date) -> SeasonGame:
@@ -80,7 +79,7 @@ def test_build_game_features_computes_both_sides() -> None:
     day = date(2021, 10, 19)
     game = _season_game(22100001, day)
     elo = {(game.game_id, "BOS"): 1500.0, (game.game_id, "NYK"): 1520.0}
-    features, notes = build_game_features([game], elo, {})
+    features, notes = build_game_features([game], elo, [])
     assert notes == [f"game {game.game_id} has no report snapshot at or before its T-60 cutoff"]
     (entry,) = features
     assert entry.game_id == game.game_id
@@ -97,7 +96,7 @@ def test_health_aggregates_from_selected_snapshot(tmp_path: Path) -> None:
         "a.rows.jsonl",
         [_row("Player 11", "Out", team="New York Knicks"), _row("Player 1", "Out")],
     )
-    index = load_injury_index(tmp_path)
+    snapshots = load_injury_index(tmp_path)
     game = _season_game(22100001, day)
     elo = {(game.game_id, "BOS"): 1500.0, (game.game_id, "NYK"): 1520.0}
     later = _season_game(22100002, date(2021, 10, 21))
@@ -115,7 +114,7 @@ def test_health_aggregates_from_selected_snapshot(tmp_path: Path) -> None:
     )
     elo[(later_game.game_id, "BOS")] = 1500.0
     elo[(later_game.game_id, "NYK")] = 1520.0
-    features, notes = build_game_features([game, later_game], elo, index)
+    features, notes = build_game_features([game, later_game], elo, snapshots)
     assert len(notes) == 2
     assert all("no play-by-play history" in note for note in notes)
     first, second = features
