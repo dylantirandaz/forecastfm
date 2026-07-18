@@ -87,24 +87,35 @@ def _process_day(day: datetime, root: Path) -> dict[str, object]:
 def _process_snapshot(day: datetime, hour: int, minute: int, day_dir: Path) -> dict[str, object]:
     slot = day.replace(hour=hour, minute=minute, tzinfo=ET_ZONE)
     target = day_dir / _snapshot_filename(slot)
-    if not target.exists():
-        time.sleep(REQUEST_DELAY_SECONDS)
-        if not _download_snapshot(slot, target):
+    try:
+        if not target.exists() and not _download_snapshot(slot, target):
             return {"slot": slot.isoformat(), "status": "missing"}
-    parsed = _parse_snapshot(slot, target, day_dir)
+        parsed = _parse_snapshot(slot, target, day_dir)
+    except Exception as error:
+        return {"slot": slot.isoformat(), "status": "error", "error": type(error).__name__}
     return {"slot": slot.isoformat(), "status": "downloaded", **parsed}
 
 
 def _download_snapshot(slot: datetime, target: Path) -> bool:
     url = _snapshot_url(slot)
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            payload = response.read()
-    except urllib.error.HTTPError as exc:
-        if exc.code in {403, 404}:
-            return False
-        raise
+    for attempt in range(3):
+        time.sleep(REQUEST_DELAY_SECONDS)
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                payload = response.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code in {403, 404}:
+                return False
+            if attempt == 2:
+                raise
+            time.sleep(2.0 * (attempt + 1))
+        except (TimeoutError, urllib.error.URLError):
+            if attempt == 2:
+                raise
+            time.sleep(2.0 * (attempt + 1))
+        else:
+            break
     temporary = target.with_suffix(".tmp")
     temporary.write_bytes(payload)
     temporary.replace(target)
