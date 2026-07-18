@@ -1,0 +1,187 @@
+"""Build private-prototype model tables from season games, features, and Elo state.
+
+Home-perspective rows only: the side swap is the exact negation by construction. The Elo recipe
+is the frozen prototype choice (initial 1500, K 20, scale 400, home advantage 100, base 10,
+per-season reset, no carryover); it is disclosed in the manifest and must not be compared with
+FiveThirtyEight's carryover Elo. Neutral-site games carry zero home advantage. The schedule
+strength feature reads each prior game's pregame opponent rating from the same replay.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date, timedelta
+
+from forecastfm.elo_residual import EloResidualRow
+from forecastfm.integrity import canonical_sha256
+from forecastfm.nba_arenas import is_neutral_site
+from forecastfm.nba_elo_replay import NbaEloRecipe, NbaEloReplayRow
+from forecastfm.nba_elo_state import NbaEloState
+from forecastfm.nba_feature_builder import GameFeatures
+from forecastfm.nba_resolutions import NbaResolution
+from forecastfm.nba_rich import NBA_LOCAL_HEALTH_FEATURE_NAMES, NBA_RICH_FEATURE_NAMES
+from forecastfm.nba_season_games import SeasonGame
+
+NBA_PROTOTYPE_DATASET_SCHEMA_VERSION = 1
+
+PROTOTYPE_ELO_RECIPE = NbaEloRecipe(
+    initial_rating=1500.0,
+    k_factor=20.0,
+    rating_scale=400.0,
+    home_advantage=100.0,
+)
+
+_RESOLUTION_LAG = timedelta(hours=3)
+
+
+@dataclass(frozen=True, slots=True)
+class PrototypeGameRow:
+    """One home-perspective model row with identity and answer."""
+
+    question_id: str
+    game_id: int
+    season: int
+    game_date: date
+    elo_home_probability: float
+    features_standard: tuple[float, ...]
+    features_health: tuple[float, ...] | None
+    home_won: bool
+
+
+def question_id_for(game_id: int) -> str:
+    """Return the stable cohort identity for one game."""
+    return f"nba-{game_id}"
+
+
+def build_replay_inputs(
+    games: list[SeasonGame],
+    source_id: str,
+) -> tuple[list[NbaEloReplayRow], list[NbaResolution]]:
+    """Build Elo replay rows and resolutions for one season's joined games."""
+    snapshot_digest = canonical_sha256({"source_id": source_id, "games": len(games)})
+    rows: list[NbaEloReplayRow] = []
+    resolutions: list[NbaResolution] = []
+    for game in games:
+        neutral = is_neutral_site(game.game_date, game.away_abbreviation, game.home_abbreviation)
+        cutoff = game.tipoff - timedelta(minutes=60)
+        rows.append(
+            NbaEloReplayRow(
+                question_id=question_id_for(game.game_id),
+                source_game_id=str(game.game_id),
+                season=game.season_label,
+                team_id=game.home_abbreviation,
+                opponent_id=game.away_abbreviation,
+                site="neutral" if neutral else "home",
+                forecast_cutoff=cutoff,
+                scheduled_tipoff=game.tipoff,
+            )
+        )
+        resolutions.append(
+            NbaResolution(
+                question_id=question_id_for(game.game_id),
+                source_game_id=str(game.game_id),
+                team_id=game.home_abbreviation,
+                opponent_id=game.away_abbreviation,
+                site="neutral" if neutral else "home",
+                team_score=game.home_score,
+                opponent_score=game.away_score,
+                resolved_at=game.tipoff + _RESOLUTION_LAG,
+                source_id=source_id,
+                snapshot_metadata_sha256=snapshot_digest,
+            )
+        )
+    return rows, resolutions
+
+
+def elo_ratings_by_game(
+    states: list[NbaEloState],
+    games: list[SeasonGame],
+) -> dict[tuple[int, str], float]:
+    """Map (game, team) to pregame rating from replayed Elo states."""
+    ratings: dict[tuple[int, str], float] = {}
+    for state, game in zip(states, games, strict=True):
+        ratings[(game.game_id, game.home_abbreviation)] = state.team_rating
+        ratings[(game.game_id, game.away_abbreviation)] = state.opponent_rating
+    return ratings
+
+
+def build_prototype_rows(
+    games: list[SeasonGame],
+    features: list[GameFeatures],
+    states: list[NbaEloState],
+) -> list[PrototypeGameRow]:
+    """Assemble home-perspective model rows aligned to replayed Elo states."""
+    rows: list[PrototypeGameRow] = []
+    for game, game_features, state in zip(games, features, states, strict=True):
+        standard = _differences(game_features)
+        health = (
+            (
+                game_features.health[1][0] - game_features.health[0][0],
+                game_features.health[1][1] - game_features.health[0][1],
+            )
+            if game_features.health is not None
+            else None
+        )
+        rows.append(
+            PrototypeGameRow(
+                question_id=question_id_for(game.game_id),
+                game_id=game.game_id,
+                season=game.season_label,
+                game_date=game.game_date,
+                elo_home_probability=state.team_win_probability,
+                features_standard=standard,
+                features_health=health,
+                home_won=game.home_won,
+            )
+        )
+    return rows
+
+
+def to_residual_row(row: PrototypeGameRow, *, include_health: bool) -> EloResidualRow:
+    """Convert one prototype row into an Elo-residual training row."""
+    features = row.features_standard
+    if include_health:
+        if row.features_health is None:
+            raise ValueError(f"game {row.game_id} lacks health features")
+        features = features + row.features_health
+    return EloResidualRow(
+        question_id=row.question_id,
+        elo_probability=row.elo_home_probability,
+        features=features,
+        outcome=1 if row.home_won else 0,
+    )
+
+
+def feature_names(*, include_health: bool) -> tuple[str, ...]:
+    """Return the feature-name order for one model variant."""
+    if include_health:
+        return NBA_RICH_FEATURE_NAMES + NBA_LOCAL_HEALTH_FEATURE_NAMES
+    return NBA_RICH_FEATURE_NAMES
+
+
+def fit_rms_scales(rows: list[PrototypeGameRow], *, include_health: bool) -> tuple[float, ...]:
+    """Compute uncentered RMS scales over original training rows only."""
+    vectors = [to_residual_row(row, include_health=include_health).features for row in rows]
+    names = feature_names(include_health=include_health)
+    scales: list[float] = []
+    for index in range(len(names)):
+        mean_square = sum(vector[index] ** 2 for vector in vectors) / len(vectors)
+        scales.append(mean_square**0.5 if mean_square > 0.0 else 1.0)
+    return tuple(scales)
+
+
+def _differences(game_features: GameFeatures) -> tuple[float, ...]:
+    away, home = game_features.away, game_features.home
+    return (
+        home.rest_days - away.rest_days,
+        home.back_to_back - away.back_to_back,
+        home.games_last_7 - away.games_last_7,
+        home.road_games_last_7 - away.road_games_last_7,
+        home.travel_miles - away.travel_miles,
+        home.travel_time_zones - away.travel_time_zones,
+        home.roster_continuity - away.roster_continuity,
+        home.expected_lineup_continuity - away.expected_lineup_continuity,
+        home.rolling_team_net_rating - away.rolling_team_net_rating,
+        home.rolling_player_value - away.rolling_player_value,
+        home.schedule_strength - away.schedule_strength,
+    )

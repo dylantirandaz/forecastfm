@@ -129,6 +129,11 @@ def neutral_site_games() -> tuple[tuple[date, str, str], ...]:
     return tuple(sorted(_NEUTRAL_SITE_GAMES))
 
 
+def is_neutral_site(game_date: date, away_abbreviation: str, home_abbreviation: str) -> bool:
+    """Return whether one game is played at a declared neutral venue."""
+    return (game_date, away_abbreviation, home_abbreviation) in _NEUTRAL_SITE_GAMES
+
+
 def great_circle_miles(first: NbaArena, second: NbaArena) -> float:
     """Return the haversine distance between two venues in miles."""
     lat1, lon1 = radians(first.latitude), radians(first.longitude)
