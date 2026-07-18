@@ -16,7 +16,7 @@ from forecastfm.nba_team_history import GameContext, NbaTeamHistory
 TIPOFF = datetime(2022, 1, 10, 0, 30, tzinfo=UTC)
 
 
-def _pbp_game(
+def pbp_game_fixture(
     game_id: int,
     away: str = "BOS",
     home: str = "NYK",
@@ -62,15 +62,18 @@ def _pbp_game(
     )
 
 
-def _schedule_entry(day: date, away: str = "BOS", home: str = "NYK") -> ScheduleEntry:
+def schedule_entry_fixture(day: date, away: str = "BOS", home: str = "NYK") -> ScheduleEntry:
     return ScheduleEntry(
         game_date=day, away_abbreviation=away, home_abbreviation=home, tip_clock=(19, 30)
     )
 
 
 def test_join_pairs_games_in_id_order() -> None:
-    games = [_pbp_game(22100002), _pbp_game(22100001)]
-    schedule = [_schedule_entry(date(2021, 10, 20)), _schedule_entry(date(2021, 10, 19))]
+    games = [pbp_game_fixture(22100002), pbp_game_fixture(22100001)]
+    schedule = [
+        schedule_entry_fixture(date(2021, 10, 20)),
+        schedule_entry_fixture(date(2021, 10, 19)),
+    ]
     joined, notes = join_season_games(games, schedule)
     assert notes == []
     assert [game.game_id for game in joined] == [22100001, 22100002]
@@ -81,7 +84,7 @@ def test_join_pairs_games_in_id_order() -> None:
 
 def test_join_rejects_pair_count_mismatch() -> None:
     with pytest.raises(NbaSeasonGamesError):
-        join_season_games([_pbp_game(22100001)], [])
+        join_season_games([pbp_game_fixture(22100001)], [])
 
 
 def _context(day: date, home: bool = True) -> GameContext:
@@ -91,7 +94,7 @@ def _context(day: date, home: bool = True) -> GameContext:
 
 
 def _record(history: NbaTeamHistory, day: date, home: bool = True, elo: float = 1500.0) -> None:
-    history.record_game(_pbp_game(22100001), _context(day, home), elo)
+    history.record_game(pbp_game_fixture(22100001), _context(day, home), elo)
 
 
 def test_opener_defaults() -> None:
