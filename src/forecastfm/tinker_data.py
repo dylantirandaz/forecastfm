@@ -117,33 +117,72 @@ def write_outcome_forecast_jsonl(cases: Iterable[ForecastCase], path: Path) -> N
 
 def read_outcome_training_jsonl(path: Path) -> tuple[OutcomeTrainingRecord, ...]:
     """Read and strictly validate fixed-label outcome training records."""
+    return read_outcome_training_jsonl_bytes(path.read_bytes())
+
+
+def read_outcome_training_jsonl_bytes(
+    data: bytes,
+    *,
+    expected_system_prompt: str = OUTCOME_SYSTEM_PROMPT,
+) -> tuple[OutcomeTrainingRecord, ...]:
+    """Parse fixed-label records from one already captured immutable buffer."""
+    if not expected_system_prompt:
+        raise JsonFormatError("expected outcome system prompt must not be empty")
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise JsonFormatError("outcome training data must be valid UTF-8") from error
     records: list[OutcomeTrainingRecord] = []
-    with path.open(encoding="utf-8") as file:
-        for line_number, line in enumerate(file, start=1):
-            if not line.strip():
-                continue
-            try:
-                records.append(_parse_outcome_training_record(line))
-            except (JsonFormatError, ValueError) as error:
-                raise JsonFormatError(
-                    f"invalid outcome training record on line {line_number}"
-                ) from error
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            records.append(_parse_outcome_training_record(line, expected_system_prompt))
+        except (JsonFormatError, ValueError) as error:
+            raise JsonFormatError(
+                f"invalid outcome training record on line {line_number}"
+            ) from error
     return tuple(records)
 
 
-def read_outcome_forecast_jsonl(path: Path) -> tuple[ForecastRecord, ...]:
+def read_outcome_forecast_jsonl(
+    path: Path,
+    *,
+    expected_system_prompt: str = OUTCOME_SYSTEM_PROMPT,
+) -> tuple[ForecastRecord, ...]:
     """Read target-free fixed-label inference records."""
+    try:
+        value = path.read_bytes()
+    except OSError as error:
+        raise JsonFormatError("cannot read outcome forecast records") from error
+    return read_outcome_forecast_jsonl_bytes(
+        value,
+        expected_system_prompt=expected_system_prompt,
+    )
+
+
+def read_outcome_forecast_jsonl_bytes(
+    value: bytes,
+    *,
+    expected_system_prompt: str = OUTCOME_SYSTEM_PROMPT,
+) -> tuple[ForecastRecord, ...]:
+    """Parse target-free records from one already captured immutable buffer."""
+    if not expected_system_prompt:
+        raise JsonFormatError("expected outcome system prompt must not be empty")
+    try:
+        text = value.decode("utf-8")
+    except UnicodeError as error:
+        raise JsonFormatError("outcome forecast records must be valid UTF-8") from error
     records: list[ForecastRecord] = []
-    with path.open(encoding="utf-8") as file:
-        for line_number, line in enumerate(file, start=1):
-            if not line.strip():
-                continue
-            try:
-                records.append(_parse_outcome_forecast_record(line))
-            except (JsonFormatError, ValueError) as error:
-                raise JsonFormatError(
-                    f"invalid outcome forecast record on line {line_number}"
-                ) from error
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            records.append(_parse_outcome_forecast_record(line, expected_system_prompt))
+        except (JsonFormatError, ValueError) as error:
+            raise JsonFormatError(
+                f"invalid outcome forecast record on line {line_number}"
+            ) from error
     return tuple(records)
 
 
@@ -190,7 +229,10 @@ def _write_jsonl(records: Iterable[JsonlRecord], path: Path) -> None:
         raise
 
 
-def _parse_outcome_training_record(text: str) -> OutcomeTrainingRecord:
+def _parse_outcome_training_record(
+    text: str,
+    expected_system_prompt: str,
+) -> OutcomeTrainingRecord:
     record = parse_json_object(text)
     require_exact_keys(record, {"question_id", "messages", "label"}, "outcome record")
     question_id = require_string(required_field(record, "question_id"), "question_id")
@@ -199,12 +241,15 @@ def _parse_outcome_training_record(text: str) -> OutcomeTrainingRecord:
     messages = [_parse_chat_message(value, index) for index, value in enumerate(values)]
     if [message["role"] for message in messages] != ["system", "user"]:
         raise JsonFormatError("outcome training messages must be target-free system and user turns")
-    if messages[0]["content"] != OUTCOME_SYSTEM_PROMPT:
+    if messages[0]["content"] != expected_system_prompt:
         raise JsonFormatError("outcome training record uses an unexpected system prompt")
     return OutcomeTrainingRecord(question_id=question_id, messages=messages, label=label)
 
 
-def _parse_outcome_forecast_record(text: str) -> ForecastRecord:
+def _parse_outcome_forecast_record(
+    text: str,
+    expected_system_prompt: str,
+) -> ForecastRecord:
     record = parse_json_object(text)
     require_exact_keys(record, {"question_id", "messages"}, "outcome forecast record")
     question_id = require_string(required_field(record, "question_id"), "question_id")
@@ -212,7 +257,7 @@ def _parse_outcome_forecast_record(text: str) -> ForecastRecord:
     messages = [_parse_chat_message(value, index) for index, value in enumerate(values)]
     if [message["role"] for message in messages] != ["system", "user"]:
         raise JsonFormatError("outcome forecast messages must be target-free system and user turns")
-    if messages[0]["content"] != OUTCOME_SYSTEM_PROMPT:
+    if messages[0]["content"] != expected_system_prompt:
         raise JsonFormatError("outcome forecast record uses an unexpected system prompt")
     return ForecastRecord(question_id=question_id, messages=messages)
 

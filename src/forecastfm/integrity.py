@@ -21,6 +21,11 @@ def canonical_sha256(value: object) -> str:
     return text_sha256(canonical_json(value))
 
 
+def bytes_sha256(value: bytes) -> str:
+    """Return the SHA-256 digest of one immutable byte buffer."""
+    return hashlib.sha256(value).hexdigest()
+
+
 def file_sha256(path: Path) -> str:
     """Return the SHA-256 digest of a file without loading it all at once."""
     digest = hashlib.sha256()

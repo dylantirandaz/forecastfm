@@ -1,7 +1,7 @@
 """Tests for realized-winner labels and binary probability conversion."""
 
 from dataclasses import replace
-from math import log
+from math import inf, log, nan
 from pathlib import Path
 
 import pytest
@@ -14,6 +14,7 @@ from forecastfm.outcome import (
     TEAM_LABEL,
     OutcomeForecastError,
     build_outcome_messages,
+    elo_offset_team_probability_from_logprobs,
     label_for_example,
     require_label_token_ids,
     symmetric_team_probability,
@@ -122,6 +123,27 @@ def test_swapping_label_scores_complements_probability() -> None:
     swapped = team_probability_from_logprobs(-1.2, -0.3)
 
     assert original == pytest.approx(1.0 - swapped)
+
+
+def test_elo_offset_probability_adds_the_candidate_logit_residual() -> None:
+    assert elo_offset_team_probability_from_logprobs(0.6, -1.0, -1.0) == pytest.approx(0.6)
+    assert elo_offset_team_probability_from_logprobs(0.6, log(2.0), 0.0) == pytest.approx(0.75)
+    assert elo_offset_team_probability_from_logprobs(0.4, -10_000.0, 0.0) == 0.0
+    assert elo_offset_team_probability_from_logprobs(0.4, 0.0, -10_000.0) == 1.0
+
+
+@pytest.mark.parametrize("elo_probability", [0.0, 1.0, nan, inf, -inf])
+def test_elo_offset_probability_requires_an_interior_finite_prior(
+    elo_probability: float,
+) -> None:
+    with pytest.raises(OutcomeForecastError, match="Elo team probability"):
+        elo_offset_team_probability_from_logprobs(elo_probability, -1.0, -1.0)
+
+
+@pytest.mark.parametrize("label_logprob", [nan, inf, -inf])
+def test_elo_offset_probability_requires_finite_label_scores(label_logprob: float) -> None:
+    with pytest.raises(OutcomeForecastError, match="label log-probabilities"):
+        elo_offset_team_probability_from_logprobs(0.5, label_logprob, -1.0)
 
 
 def test_side_swap_is_an_involution() -> None:

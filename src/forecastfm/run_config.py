@@ -1,5 +1,6 @@
 """Explicit training and inference settings that prospective runs must freeze."""
 
+import importlib.metadata
 from pathlib import Path
 
 from forecastfm.integrity import file_sha256
@@ -14,6 +15,7 @@ CHAT_TEMPLATE_SHA256 = "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca09
 
 TINKER_VERSION = "0.22.7"
 TINKER_COOKBOOK_VERSION = "0.4.3"
+TORCH_VERSION = "2.13.0"
 
 BATCH_SIZE = 8
 LEARNING_RATE = 2e-4
@@ -26,6 +28,21 @@ TEMPERATURE = 0.0
 TOP_K = -1
 TOP_P = 1.0
 SEED = 0
+
+
+def require_pinned_tinker_packages() -> None:
+    """Require the exact local SDK and tensor-library versions in the run lock."""
+    expected = {
+        "tinker": TINKER_VERSION,
+        "tinker-cookbook": TINKER_COOKBOOK_VERSION,
+        "torch": TORCH_VERSION,
+    }
+    try:
+        actual = {name: importlib.metadata.version(name) for name in expected}
+    except importlib.metadata.PackageNotFoundError as error:
+        raise RuntimeError("install the pinned Tinker optional dependencies") from error
+    if actual != expected:
+        raise RuntimeError(f"installed Tinker packages differ from the run lock: {actual}")
 
 
 def require_tokenizer_snapshot() -> Path:

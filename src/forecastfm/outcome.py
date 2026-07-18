@@ -1,6 +1,6 @@
 """Outcome-classification prompts and probability conversion."""
 
-from math import exp, isfinite
+from math import exp, isfinite, log
 from typing import Protocol
 
 from forecastfm.models import Distribution, ForecastCase, ForecastPrediction, TrainingExample
@@ -88,6 +88,29 @@ def team_probability_from_logprobs(
         return 1.0 / (1.0 + exp(-difference))
     ratio = exp(difference)
     return ratio / (1.0 + ratio)
+
+
+def elo_offset_team_probability_from_logprobs(
+    elo_team_probability: float,
+    team_logprob: float,
+    opponent_logprob: float,
+) -> float:
+    """Add a two-label model residual to Elo and return the final probability."""
+    if not isfinite(elo_team_probability) or not 0.0 < elo_team_probability < 1.0:
+        raise OutcomeForecastError("Elo team probability must be finite and interior")
+    if not isfinite(team_logprob) or not isfinite(opponent_logprob):
+        raise OutcomeForecastError("label log-probabilities must be finite")
+
+    final_logit = (
+        log(elo_team_probability)
+        - log(1.0 - elo_team_probability)
+        + team_logprob
+        - opponent_logprob
+    )
+    if final_logit >= 0.0:
+        return 1.0 / (1.0 + exp(-final_logit))
+    odds = exp(final_logit)
+    return odds / (1.0 + odds)
 
 
 def prediction_from_logprobs(
