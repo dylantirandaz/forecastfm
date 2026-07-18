@@ -1,0 +1,27 @@
+name: Outcome v2 publication timestamp
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/outcome-v2-publication-timestamp.yml"
+      - "prospective/outcome_v2/rolling/**"
+
+permissions:
+  contents: read
+
+jobs:
+  timestamp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    env:
+      EXPECTED_REF: refs/heads/main
+      EXPECTED_REPOSITORY: dylantirandaz/forecastfm
+    steps:
+      - name: Bind GitHub server time to the pushed commit
+        shell: bash
+        run: |
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF" = "$EXPECTED_REF"
+          test -n "$GITHUB_SHA"

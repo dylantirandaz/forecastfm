@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Literal
+from typing import Literal, cast
 
 from forecastfm.integrity import canonical_json, canonical_sha256, text_sha256
 from forecastfm.json_utils import (
@@ -37,7 +37,10 @@ _ENVELOPE_KEYS = {
 _ENVELOPE_BODY_KEYS = _ENVELOPE_KEYS - {"event_hash"}
 
 type EventType = Literal["forecast_batch", "resolution_batch"]
+type GameSite = Literal["home", "away", "neutral"]
 type JsonObject = dict[str, object]
+
+_GAME_SITES = frozenset({"home", "away", "neutral"})
 
 
 class LedgerValidationError(ValueError):
@@ -110,6 +113,9 @@ class CohortGame:
 
     question_id: str
     source_game_id: str
+    team_id: str
+    opponent_id: str
+    site: GameSite
     matchup: str
     outcomes: tuple[str, ...]
     forecast_deadline: datetime
@@ -118,7 +124,15 @@ class CohortGame:
     def __post_init__(self) -> None:
         _require_text(self.question_id, "question_id")
         _require_text(self.source_game_id, "source_game_id")
+        _require_text(self.team_id, "team_id")
+        _require_text(self.opponent_id, "opponent_id")
+        if self.team_id == self.opponent_id:
+            raise LedgerValidationError("team_id and opponent_id must differ")
+        if self.site not in _GAME_SITES:
+            raise LedgerValidationError("site must be home, away, or neutral")
         _require_text(self.matchup, "matchup")
+        if self.matchup != f"{self.team_id} vs {self.opponent_id}":
+            raise LedgerValidationError("matchup must equal the structured team orientation")
         if len(self.outcomes) < 2 or len(set(self.outcomes)) != len(self.outcomes):
             raise LedgerValidationError("outcomes must contain at least two unique values")
         for outcome in self.outcomes:
@@ -251,6 +265,9 @@ def _cohort_to_dict(cohort: Cohort) -> JsonObject:
             {
                 "question_id": game.question_id,
                 "source_game_id": game.source_game_id,
+                "team_id": game.team_id,
+                "opponent_id": game.opponent_id,
+                "site": game.site,
                 "matchup": game.matchup,
                 "outcomes": list(game.outcomes),
                 "forecast_deadline": _utc_text(game.forecast_deadline),
@@ -295,6 +312,9 @@ def _cohort_game_from_object(value: object, index: int) -> CohortGame:
     keys = {
         "question_id",
         "source_game_id",
+        "team_id",
+        "opponent_id",
+        "site",
         "matchup",
         "outcomes",
         "forecast_deadline",
@@ -304,11 +324,21 @@ def _cohort_game_from_object(value: object, index: int) -> CohortGame:
     return CohortGame(
         question_id=_string(record, "question_id"),
         source_game_id=_string(record, "source_game_id"),
+        team_id=_string(record, "team_id"),
+        opponent_id=_string(record, "opponent_id"),
+        site=_site(record),
         matchup=_string(record, "matchup"),
         outcomes=_string_tuple(_field(record, "outcomes"), "outcomes"),
         forecast_deadline=_time(record, "forecast_deadline"),
         scheduled_tipoff=_time(record, "scheduled_tipoff"),
     )
+
+
+def _site(record: Mapping[str, object]) -> GameSite:
+    value = _string(record, "site")
+    if value not in _GAME_SITES:
+        raise LedgerValidationError("site must be home, away, or neutral")
+    return cast(GameSite, value)
 
 
 def load_cohort(path: Path) -> Cohort:

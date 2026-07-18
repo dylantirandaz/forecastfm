@@ -36,6 +36,9 @@ def make_cohort() -> Cohort:
         CohortGame(
             question_id=f"question-{index}",
             source_game_id=f"source-{index}",
+            team_id=f"Team {index}",
+            opponent_id=f"Opponent {index}",
+            site="neutral",
             matchup=f"Team {index} vs Opponent {index}",
             outcomes=("listed_team_wins", "opponent_wins"),
             forecast_deadline=FORECAST_DEADLINE,
