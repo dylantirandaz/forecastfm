@@ -115,11 +115,11 @@ def _download_snapshot(slot: datetime, target: Path) -> bool:
                 raise
             time.sleep(2.0 * (attempt + 1))
         else:
-            break
-    temporary = target.with_suffix(".tmp")
-    temporary.write_bytes(payload)
-    temporary.replace(target)
-    return True
+            temporary = target.with_suffix(".tmp")
+            temporary.write_bytes(payload)
+            temporary.replace(target)
+            return True
+    raise RuntimeError("unreachable")
 
 
 def _parse_snapshot(slot: datetime, target: Path, day_dir: Path) -> dict[str, object]:
