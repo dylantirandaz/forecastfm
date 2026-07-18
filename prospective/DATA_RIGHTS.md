@@ -6,20 +6,43 @@ agreement says otherwise; the code fails closed.
 
 ## Audited source decision
 
-[SportsDataIO production NBA access](https://sportsdata.io/nba-api) is the best current one-vendor
-candidate because its documented [NBA workflow](https://sportsdata.io/developers/workflow-guide/nba)
-covers schedules, rosters, injuries, projected and confirmed lineups, statistics, and historical
-data. The practical request is a narrow Vault + Leagues agreement through
-[SportsDataIO sales](https://sportsdata.io/contact-us). Its
-[free developer trial](https://sportsdata.io/developers) is scrambled rather than real data, so it
-cannot populate or validate this dataset. SportsDataIO's
+### Decision log, 2026-07-17: SportsDataIO rejected for the T-60 historical task
+
+[SportsDataIO production NBA access](https://sportsdata.io/nba-api) was audited through four
+vendor-supplied sample files (starting lineups, box scores, player game logs, season aggregates)
+and a pre-NDA Sales clarification, and is rejected as the primary historical T-60 injury/lineup
+source. The samples were internally consistent finalized postgame snapshots with no publication,
+revision, deletion, or as-of fields. Sales stated (user-supplied correspondence, nonbinding) that
+they do not retain every correction/deletion revision, that historical depth charts were not
+retained, that historical injury state exists only embedded in the final Box Score record as
+status at game start, and that the historical API is not designed to reconstruct an earlier
+pregame state. A game-start injury field could support a separate T0 lock-time task only under
+contractual publication-timing, completeness, versioning, and rights guarantees; it cannot support
+the T-60 task. The project did not proceed to NDA/Sales. The SportsDataIO registry, client, and
+capture code remain in the repository as a provider-security and schema boundary and for possible
+schedule/statistics, T0, or prospective uses if those are separately proven. Do not represent
+SportsDataIO as satisfying outcome-v2 T-60 history.
+
+For the record: its [free developer trial](https://sportsdata.io/developers) is scrambled rather
+than real data, so it cannot populate or validate this dataset. Replay can exercise a connector
+against real archived responses at zero cost, but the one inspected NBA Replay session covered a
+single week (2023-11-21 through 2023-11-28 EST) with package/session-specific keys and no
+self-service full-season package, and Replay does not by itself prove complete revision history,
+original publication times, or training rights. SportsDataIO's
 [historical-data page](https://sportsdata.io/historical-sports-data) describes machine-learning use,
 but that description is not a grant of the exact storage, Tinker, derivative-output, or
 redistribution rights required here; the signed order form and
-[current terms](https://sportsdata.io/terms-of-service) control.
+[current terms](https://sportsdata.io/terms-of-service) would have controlled.
+
+### Leading trial candidate: Sportradar
 
 [Sportradar's NBA API](https://developer.sportradar.com/basketball/reference/nba-overview) is the
-official-data alternative, but its standard developer access and
+leading trial candidate. Its documentation advertises NBA data back to 2013, official NBA-sourced
+data from 2017, a date/current-state Daily Injuries feed, and a Daily Change Log with changed
+resource IDs and last-modified timestamps. The unresolved decisive question: a change timestamp
+proves that an object changed, not that every old payload value remains queryable. The bounded
+trial inspection in [SPORTRADAR_TRIAL_PLAN.md](SPORTRADAR_TRIAL_PLAN.md) must answer that before
+any spend. Its standard developer access and
 [terms](https://developer.sportradar.com/sportradar-updates/page/terms-and-conditions) do not by
 themselves clear this pipeline. Use it only under a custom written agreement covering the intended
 machine-learning and third-party-processing uses.

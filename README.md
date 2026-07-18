@@ -259,6 +259,134 @@ Elo-relative log score is positive (`+0.000884`), but only 2014 passes independe
 confidence bound crosses zero, and 2015 has negative mean improvement. The checked-in
 `outcome_v2` manifest therefore marks both raw- and recalibrated-Elo gates false and RL not ready.
 
+The production outcome-v2 lane is separate from that opened diagnostic. It requires licensed
+point-in-time artifacts, deterministic Elo replay, a sealed candidate gate over at least two
+chronological seasons, reviewed processing rights, and external commitment proofs. The guarded
+tabular path is deliberately two-stage:
+
+```bash
+uv run python -m examples.fit_nba_rich_baseline
+uv run python -m examples.predict_nba_rich_baseline
+```
+
+The fit command is the only stage that reads final scores. It fits the fixed 11-feature,
+no-intercept Elo correction with training-only RMS scales and writes a create-only model artifact
+under the ignored data tree. Licensed-data-derived scales and weights are not published by default.
+The prediction command has no answer input: it loads that frozen model, predicts every later-season
+feature row in order, checks side-swap symmetry, and writes both canonical forecasts and a
+create-only forecast lock under `prospective/`. The lock binds the exact model, evaluation rows,
+ordered IDs, seasons,
+and forecast bytes. These commands are implemented and tested, but the checked-in repository has
+no licensed rich rows to run through them and therefore contains no production model or forecasts.
+
+For an approved local SportsDataIO inspection, `.sportsdataio.env` is ignored and contains exactly
+one assignment. The loader requires an owned, regular file with no group or other permissions:
+
+```text
+SPORTSDATAIO_API_KEY="your-actual-key"
+```
+
+```bash
+chmod 600 .sportsdataio.env
+mkdir -m 700 data/raw/sportsdataio
+uv run python -m examples.capture_sportsdataio_nba games \
+  /v3/nba/scores/json/Games/2025 \
+  --storage-root data/raw/sportsdataio \
+  --output data/raw/sportsdataio/games-2025.json
+```
+
+With its default transport, the bounded client makes one certificate-verified `GET` to the fixed
+SportsDataIO host for a registered NBA path. It forces HTTP debug output off and does not follow
+redirects, retry, accept compression or unsafe HTTP framing, or retain a response that reflects
+the key. The injectable transport is only a trusted test seam. A successful response becomes only
+a `local_retrieval_only` raw capture. No network call has been made from this repository workflow.
+This path does not prove Replay entitlement, provider identity, publication chronology, revision
+completeness, processing rights, data conformance, or model authorization. Production and RL
+remain closed.
+
+Provider sample acceptance is also executable rather than a checklist-only claim. The bounded
+conformance validator exact-compares decoded raw revisions and schedule facts with a claimed
+independently reviewed inventory, checks T-6h/T-60/T-15 selection, correction/deletion cases,
+inventory-relative schedule coverage, raw-to-Elo lineage, and the cohort's exact snapshot-pack
+hash. It cannot authenticate the reviewer, inventory, contract, connector code, or timestamp by
+itself; those remain external proofs.
+
+After the rich baseline and external proofs pass, the guarded SFT entrypoint is:
+
+```bash
+uv run --extra tinker python -m examples.train_tinker_outcome_v2_sft
+```
+
+That command becomes billable only after every gate passes. With the checked-in manifest it fails
+locally before writing a run lock or importing the paid runtime. A real run must start from clean,
+published code; it writes and re-verifies a create-only training lock before client creation,
+trains exactly the frozen number of Elo-offset binary-cross-entropy steps from retained bytes, and
+then creates a separate experiment seal containing the permanent Tinker state and sampler paths.
+The trained token-logit difference is a residual: inference uses
+`logit(Elo) + logp(TEAM) - logp(OTHER)`, so a zero residual recovers Elo exactly.
+The answer-blind runtime renders every prompt before client creation, appends each fixed label in
+turn, and drains four logical candidate-logprob calls per game. It makes one application attempt
+and no application retry; Tinker 0.22.7 may still retransmit the same logical request internally
+for up to five minutes after specified transport/status failures. Generated text is ignored. A
+durable start event precedes the calls, interrupted starts become terminal failures without another
+call, and the runtime compiles both raw score records and their exact derived forecast file.
+
+The SFT result cannot reuse the tabular gate's opened seasons as an untouched test. Its advancement
+gate requires a new, disjoint cohort whose every season is later than the tabular seasons. The
+answer-free seal reconstructs original and side-swapped prompts from strict feature rows, verifies
+the pre-call generation lock, derives forecasts from terminal raw label-logprob records, and binds
+that chain to the run lock, experiment, sampler, and cohort. The final post-SFT report then
+recomputes the same raw- and recalibrated-Elo gate under a distinct report identity.
+
+That single-lock multi-season path is explicitly a retrospective, answer-held holdout. It does not
+prove that a historical result was unknown to model pretraining. The separate rolling path now
+freezes a multi-season plan, permits one-season slate locks, rejects any batch outside
+`latest input <= generation <= local terminal seal < earliest T-60 cutoff`, and binds terminal raw
+records rather than trusting a derived probability file.
+
+The rolling plan and terminal seal each require a live GitHub Actions receipt. The pinned push
+workflow runs only on `main` changes under `prospective/outcome_v2/rolling/`; the verifier requires
+the exact repository, branch, push event, numeric workflow ID, workflow path and bytes, first run
+attempt, successful run state, and exact artifact bytes fetched at the run's full head SHA. GitHub
+`created_at` is used only as centralized evidence that those bytes existed by that time. The plan
+receipt must predate the batch's earliest input, and the terminal receipt must predate its earliest
+T-60 cutoff. Git commit dates and workflow `updated_at` are not treated as trusted time.
+
+Each planned season now also gets an externally receipted schedule seal. It structurally binds the
+exact replay rows to a claimed provider-conformance report but does not authenticate that report or
+prove NBA schedule completeness. The answer-free aggregator requires the union of all verified
+batch IDs to equal the committed multi-season schedule exactly. It rejects duplicate batches,
+feature rows, receipts, missing games, and extras, then derives forecasts from terminal
+label-logprob records in schedule order. Its seal retains every failure and binds the plan,
+coverage, GitHub receipts, provider reports, generation locks, schedule, feature rows, and
+forecasts. It does not create the final evaluation cohort.
+
+After outcomes are available, the rolling scorer re-verifies the aggregate and independently
+replays the frozen canonical Elo recipe. It rejects any feature-row Elo probability that differs
+from the replay before creating the separate evaluation cohort and answer inputs used by the
+generic gate. Its create-only seal hashes the exact snapshot-pack and resolution bytes, uses each
+bound snapshot's `available_at` for Elo update chronology rather than the resolution row's declared
+`resolved_at`, and freezes each game date as scheduled tipoff converted through
+`America/New_York`. The seal binds the cohort, answers, and forecasts.
+
+The prospective plan also binds the original training-only calibration hash and evaluation-policy
+hash from the immutable run lock. The scoring seal requires the exact calibration bytes to match
+the plan and carries both hashes. `outcome_v2_rolling_gate.py` rejects calibration substitution or
+a weakened policy, re-runs the generic multi-season gate, and checks its cohort, answer, forecast,
+and calibration hashes plus question IDs and seasons. Its terminal wrapper is explicitly
+`structural_claim_only`, with prospective-win and RL authorization both `denied`.
+
+No real receipt exists yet: no production plan, schedule seal, slate, or aggregate has been pushed.
+GitHub is also a deletable centralized record, not a signed transparency log. The current coverage
+status is only `structurally_bound_to_claimed_conformance_report`; provider/reviewer authentication,
+licensed raw bytes, and remote-inference attestation remain required before a prospective win over
+Elo can be claimed. Schema v1 also rejects any cancellation or reschedule after the first season
+feature input; it has no amendment protocol for those changes. No provider-backed production
+remote run has occurred. The scorer does not parse opaque provider score payloads, so provider
+authenticity and licensed connector score derivation remain separate requirements. A passing local
+gate cannot yet authorize a prospective win claim or RL, and the production rolling gate remains
+hard-closed.
+
 ### Open-modern historical lane
 
 A separate protocol-frozen historical lane extends the diagnostic through 2022. It is not a
@@ -279,8 +407,9 @@ but not versus recalibration, so `validation_lock.json` records
 
 ### When RL becomes useful
 
-RL is gated on the tabular and supervised ForecastFM corrections first clearing the multi-season
-Elo gate. Its intended job is sequential decision-making: choose which permitted evidence source
+RL is gated on the tabular baseline and the separately sealed post-SFT ForecastFM report first
+clearing their respective multi-season Elo gates. Its intended job is sequential decision-making:
+choose which permitted evidence source
 to inspect, whether to pay to retrieve it, how much to trust it, when to update, and when to stop.
 The reward remains a proper realized-outcome log score relative to Elo, minus predeclared tool
 costs and an optional KL penalty. RL does not replace the fixed chronological evaluation or make
@@ -352,9 +481,23 @@ is not used by this workflow.
 - `nba_v2.py`: prior-date rolling NBA features with exact side-swap symmetry.
 - `nba_evidence.py`: licensed-source rights, timing, lineage, and numeric evidence bundles.
 - `nba_rich.py`: the predeclared richer NBA feature schema and exact side swaps.
+- `nba_rich_baseline.py`: frozen 11-feature Elo correction and answer-free forecast lock.
+- `nba_raw_capture.py`: create-only caller-asserted response envelopes with no origin or rights claim.
+- `sportsdataio_nba_openapi.py`: typed identities for eight required public NBA API paths.
+- `sportsdataio_nba_client.py`: one-attempt fixed-host retrieval into a local-only raw capture.
+- `local_config.py`: strict loaders for ignored local API-key assignment files.
+- `nba_provider_conformance.py`: bounded exact checks against a claimed reviewed vendor inventory.
+- `nba_elo_replay.py`: deterministic chronological Elo state replay from sealed prior results.
+- `nba_evaluation_gate.py`: recomputed per-season candidate gates against raw and recalibrated Elo.
 - `elo_residual.py`: dependency-free cross-entropy correction to Elo log-odds.
 - `outcome_v2_metrics.py`: strict per-season Elo-relative scores and block-bootstrap gate.
 - `outcome_v2_preflight.py`: offline full-data, rights, hash, pair, and batch-coverage gate.
+- `outcome_v2_run.py`: create-only pre-client lock over exact bytes, code, model, and settings.
+- `outcome_v2_experiment.py`: post-training seal for permanent state and sampler paths.
+- `outcome_v2_coverage.py`: receipted schedule seals structurally bound to claimed reports.
+- `outcome_v2_aggregation.py`: exact multi-season batch union and answer-free forecast seal.
+- `outcome_v2_rolling_score.py`: sealed snapshot-timed Elo replay and scoring-input construction.
+- `outcome_v2_rolling_gate.py`: structural-only wrapper with frozen policy and authorization denial.
 - `open_modern.py`: pinned source sealing and mandatory development/holdout hash verification.
 - `open_modern_features.py`: outcome-free causal schedule and completed-prior-season RAPTOR inputs.
 - `open_modern_model.py`: one predeclared residual forecast, fixed recalibration, and gate metrics.
@@ -377,7 +520,7 @@ is not used by this workflow.
 1. Add licensed, point-in-time richer inputs to address the failed historical Elo gate.
 2. Re-run a tabular falsification baseline on newly frozen chronological seasons.
 3. Fine-tune ForecastFM on the same realized-winner objective only after that baseline is sound.
-4. Require every declared season to clear the frozen Elo-relative log-score gate.
+4. Require a new later, disjoint post-SFT cohort to clear the frozen Elo-relative log-score gate.
 5. Attempt sequential evidence RL only after the supervised full-information model passes.
 
 See [ROADMAP.md](ROADMAP.md) for the acceptance criteria for each milestone.
