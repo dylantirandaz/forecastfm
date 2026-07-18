@@ -3,6 +3,7 @@
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from math import copysign
+from typing import cast
 
 import pytest
 
@@ -97,6 +98,9 @@ def _bundle() -> NbaEvidenceBundle:
     game = CohortGame(
         question_id="game-1",
         source_game_id="source-game-1",
+        team_id="Team",
+        opponent_id="Opponent",
+        site="neutral",
         matchup="Team vs Opponent",
         outcomes=("team", "opponent"),
         forecast_deadline=CUTOFF,
@@ -147,6 +151,11 @@ def test_rich_features_reconstruct_from_the_frozen_vector_order() -> None:
     assert NbaRichFeatures.from_vector(features.vector) == features
     with pytest.raises(NbaEvidenceError, match="feature count is invalid"):
         NbaRichFeatures.from_vector(features.vector[:-1])
+
+    with pytest.raises(NbaEvidenceError, match="rest_days must be a finite float"):
+        replace(features, rest_days_difference=cast(float, 1))
+    with pytest.raises(NbaEvidenceError, match="rest_days cannot use negative zero"):
+        replace(features, rest_days_difference=-0.0)
 
 
 def test_rich_feature_kinds_are_predeclared() -> None:

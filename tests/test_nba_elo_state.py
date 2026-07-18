@@ -46,6 +46,10 @@ def _feature_row(state: NbaEloState) -> NbaRichFeatureRow:
     probability = state.team_win_probability
     return NbaRichFeatureRow(
         question_id=state.question_id,
+        source_game_id=f"source-{state.question_id}",
+        team_id="Team",
+        opponent_id="Opponent",
+        site="home",
         season=2027,
         forecast_cutoff=CUTOFF,
         scheduled_tipoff=TIPOFF,

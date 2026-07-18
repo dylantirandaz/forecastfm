@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta, timezone
+from typing import cast
 
 import pytest
 
@@ -79,6 +80,9 @@ def make_game() -> CohortGame:
     return CohortGame(
         question_id="nba-game-1",
         source_game_id="provider-game-1",
+        team_id="Team",
+        opponent_id="Opponent",
+        site="neutral",
         matchup="Team vs Opponent",
         outcomes=("listed_team_wins", "opponent_wins"),
         forecast_deadline=FORECAST_DEADLINE,
@@ -376,6 +380,13 @@ def test_duplicate_and_missing_source_references_are_rejected() -> None:
         make_bundle(records=(duplicate_record, duplicate_record))
 
 
+def test_evidence_values_require_canonical_floats() -> None:
+    with pytest.raises(NbaEvidenceError, match="team_value must be a finite float"):
+        replace(make_record(), team_value=cast(float, 1))
+    with pytest.raises(NbaEvidenceError, match="team_value cannot use negative zero"):
+        replace(make_record(), team_value=-0.0)
+
+
 def test_bundle_hash_is_deterministic_and_sensitive_to_bound_inputs() -> None:
     bundle = make_bundle()
     original = evidence_bundle_sha256(bundle)
@@ -389,7 +400,14 @@ def test_bundle_hash_is_deterministic_and_sensitive_to_bound_inputs() -> None:
         bundle,
         sources=(replace(bundle.sources[0], snapshot_metadata_sha256="e" * 64),),
     )
-    changed_matchup = replace(bundle, game=replace(bundle.game, matchup="Changed matchup"))
+    changed_matchup = replace(
+        bundle,
+        game=replace(
+            bundle.game,
+            team_id="Changed",
+            matchup="Changed vs Opponent",
+        ),
+    )
     changed_question = replace(bundle, question=replace(bundle.question, text="Changed question"))
 
     assert len(original) == 64

@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import cast
 
 from forecastfm.integrity import canonical_json
 from forecastfm.json_utils import (
@@ -24,7 +25,7 @@ from forecastfm.json_utils import (
     require_string,
     required_field,
 )
-from forecastfm.ledger import CohortGame
+from forecastfm.ledger import CohortGame, GameSite
 from forecastfm.models import ForecastQuestion
 from forecastfm.nba_data import SIDE_SWAP_SUFFIX
 from forecastfm.nba_evidence import (
@@ -54,6 +55,9 @@ _BUNDLE_KEYS = {
 _GAME_KEYS = {
     "question_id",
     "source_game_id",
+    "team_id",
+    "opponent_id",
+    "site",
     "matchup",
     "outcomes",
     "forecast_deadline",
@@ -266,6 +270,9 @@ def _game_to_payload(game: CohortGame) -> JsonObject:
     return {
         "question_id": game.question_id,
         "source_game_id": game.source_game_id,
+        "team_id": game.team_id,
+        "opponent_id": game.opponent_id,
+        "site": game.site,
         "matchup": game.matchup,
         "outcomes": list(game.outcomes),
         "forecast_deadline": _utc_text(game.forecast_deadline),
@@ -357,11 +364,21 @@ def _game_from_payload(payload: Mapping[str, object]) -> CohortGame:
     return CohortGame(
         question_id=_string_field(payload, "question_id"),
         source_game_id=_string_field(payload, "source_game_id"),
+        team_id=_string_field(payload, "team_id"),
+        opponent_id=_string_field(payload, "opponent_id"),
+        site=_game_site_field(payload),
         matchup=_string_field(payload, "matchup"),
         outcomes=_string_tuple(payload, "outcomes"),
         forecast_deadline=_time_field(payload, "forecast_deadline"),
         scheduled_tipoff=_time_field(payload, "scheduled_tipoff"),
     )
+
+
+def _game_site_field(payload: Mapping[str, object]) -> GameSite:
+    value = _string_field(payload, "site")
+    if value not in {"home", "away", "neutral"}:
+        raise JsonFormatError("site must be home, away, or neutral")
+    return cast(GameSite, value)
 
 
 def _question_from_payload(payload: Mapping[str, object]) -> ForecastQuestion:

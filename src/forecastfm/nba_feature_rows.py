@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from math import isclose, isfinite
 from pathlib import Path
+from typing import cast
 
 from forecastfm.integrity import canonical_json, canonical_sha256
 from forecastfm.json_utils import (
@@ -19,6 +20,7 @@ from forecastfm.json_utils import (
     require_string,
     required_field,
 )
+from forecastfm.ledger import GameSite
 from forecastfm.nba_data import SIDE_SWAP_SUFFIX
 from forecastfm.nba_evidence import NbaEvidenceBundle, evidence_bundle_sha256
 from forecastfm.nba_rich import (
@@ -42,10 +44,14 @@ _ROW_KEYS = {
     "features",
     "forecast_cutoff",
     "input_available_at",
+    "opponent_id",
     "question_id",
     "scheduled_tipoff",
     "season",
+    "site",
+    "source_game_id",
     "state_id",
+    "team_id",
 }
 _FEATURE_KEYS = {"name", "value"}
 
@@ -76,6 +82,10 @@ class NbaRichFeatureRow:
     """One immutable, target-free input row for a richer NBA forecast."""
 
     question_id: str
+    source_game_id: str
+    team_id: str
+    opponent_id: str
+    site: GameSite
     season: int
     forecast_cutoff: datetime
     scheduled_tipoff: datetime
@@ -90,8 +100,14 @@ class NbaRichFeatureRow:
     feature_schema_sha256: str = field(default=NBA_RICH_SCHEMA_SHA256, init=False)
 
     def __post_init__(self) -> None:
-        if not self.question_id.strip():
-            raise NbaFeatureRowError("question_id must not be empty")
+        _require_id(self.question_id, "question_id")
+        _require_id(self.source_game_id, "source_game_id")
+        _require_id(self.team_id, "team_id")
+        _require_id(self.opponent_id, "opponent_id")
+        if self.team_id == self.opponent_id:
+            raise NbaFeatureRowError("team_id and opponent_id must differ")
+        if self.site not in {"home", "away", "neutral"}:
+            raise NbaFeatureRowError("site must be home, away, or neutral")
         _require_positive_season(self.season)
         _require_utc(self.forecast_cutoff, "forecast_cutoff")
         _require_utc(self.scheduled_tipoff, "scheduled_tipoff")
@@ -123,6 +139,10 @@ class NbaRichFeatureRow:
         """Return the small canonical payload covered by ``row_sha256``."""
         return {
             "question_id": self.question_id,
+            "source_game_id": self.source_game_id,
+            "team_id": self.team_id,
+            "opponent_id": self.opponent_id,
+            "site": self.site,
             "season": self.season,
             "state_id": self.state_id,
             "forecast_cutoff": _utc_text(self.forecast_cutoff),
@@ -146,6 +166,10 @@ class NbaRichFeatureRow:
         """Exchange sides while retaining the exact causal inputs and timestamps."""
         return NbaRichFeatureRow(
             question_id=_side_swap_question_id(self.question_id),
+            source_game_id=self.source_game_id,
+            team_id=self.opponent_id,
+            opponent_id=self.team_id,
+            site=_side_swap_site(self.site),
             season=self.season,
             forecast_cutoff=self.forecast_cutoff,
             scheduled_tipoff=self.scheduled_tipoff,
@@ -178,9 +202,18 @@ def write_nba_feature_rows_jsonl(
 def read_nba_feature_rows_jsonl(path: Path) -> tuple[NbaRichFeatureRow, ...]:
     """Read and reconstruct strict canonical original T-60 feature rows."""
     try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as error:
+        value = path.read_bytes()
+    except OSError as error:
         raise NbaFeatureRowError("cannot read NBA feature-row JSONL") from error
+    return read_nba_feature_rows_jsonl_bytes(value)
+
+
+def read_nba_feature_rows_jsonl_bytes(value: bytes) -> tuple[NbaRichFeatureRow, ...]:
+    """Parse strict feature rows from one already captured immutable buffer."""
+    try:
+        text = value.decode("utf-8")
+    except UnicodeError as error:
+        raise NbaFeatureRowError("cannot decode NBA feature-row JSONL") from error
 
     rows: list[NbaRichFeatureRow] = []
     for line_number, line in enumerate(text.splitlines(), start=1):
@@ -244,6 +277,10 @@ def _build_row(
     latest_evidence_at = max(record.available_at for record in bundle.records)
     return NbaRichFeatureRow(
         question_id=bundle.game.question_id,
+        source_game_id=bundle.game.source_game_id,
+        team_id=bundle.game.team_id,
+        opponent_id=bundle.game.opponent_id,
+        site=bundle.game.site,
         season=season,
         forecast_cutoff=bundle.game.forecast_deadline,
         scheduled_tipoff=bundle.game.scheduled_tipoff,
@@ -270,6 +307,13 @@ def _feature_row_from_payload(payload: dict[str, object]) -> NbaRichFeatureRow:
         raise JsonFormatError("feature_schema_sha256 differs from the current schema")
     return NbaRichFeatureRow(
         question_id=require_string(required_field(payload, "question_id"), "question_id"),
+        source_game_id=require_string(
+            required_field(payload, "source_game_id"),
+            "source_game_id",
+        ),
+        team_id=require_string(required_field(payload, "team_id"), "team_id"),
+        opponent_id=require_string(required_field(payload, "opponent_id"), "opponent_id"),
+        site=_site_from_payload(payload),
         season=_require_json_integer(payload, "season"),
         forecast_cutoff=_parse_datetime(payload, "forecast_cutoff"),
         scheduled_tipoff=_parse_datetime(payload, "scheduled_tipoff"),
@@ -293,6 +337,13 @@ def _feature_row_from_payload(payload: dict[str, object]) -> NbaRichFeatureRow:
         ),
         input_available_at=_parse_datetime(payload, "input_available_at"),
     )
+
+
+def _site_from_payload(payload: dict[str, object]) -> GameSite:
+    value = require_string(required_field(payload, "site"), "site")
+    if value not in {"home", "away", "neutral"}:
+        raise JsonFormatError("site must be home, away, or neutral")
+    return cast(GameSite, value)
 
 
 def _parse_rich_features(payload: dict[str, object]) -> NbaRichFeatures:
@@ -322,12 +373,16 @@ def _require_original_rows(
     if not rows:
         raise NbaFeatureRowError("NBA feature-row JSONL must not be empty")
     question_ids: set[str] = set()
+    source_game_ids: set[str] = set()
     for row in rows:
         if row.question_id.endswith(SIDE_SWAP_SUFFIX):
             raise NbaFeatureRowError("NBA feature-row JSONL may contain only original rows")
         if row.question_id in question_ids:
             raise NbaFeatureRowError("NBA feature-row JSONL contains a duplicate question ID")
+        if row.source_game_id in source_game_ids:
+            raise NbaFeatureRowError("NBA feature-row JSONL contains a duplicate source game ID")
         question_ids.add(row.question_id)
+        source_game_ids.add(row.source_game_id)
     return rows
 
 
@@ -349,6 +404,11 @@ def _require_json_integer(payload: dict[str, object], field_name: str) -> int:
 def _require_positive_season(value: object) -> None:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise NbaFeatureRowError("season must be a positive integer")
+
+
+def _require_id(value: str, field_name: str) -> None:
+    if not value or value != value.strip() or not value.isprintable():
+        raise NbaFeatureRowError(f"{field_name} must be a clean nonempty string")
 
 
 def _require_utc(value: datetime, field_name: str) -> None:
@@ -383,3 +443,11 @@ def _side_swap_question_id(question_id: str) -> str:
     if question_id.endswith(SIDE_SWAP_SUFFIX):
         return question_id.removesuffix(SIDE_SWAP_SUFFIX)
     return f"{question_id}{SIDE_SWAP_SUFFIX}"
+
+
+def _side_swap_site(site: GameSite) -> GameSite:
+    if site == "home":
+        return "away"
+    if site == "away":
+        return "home"
+    return "neutral"

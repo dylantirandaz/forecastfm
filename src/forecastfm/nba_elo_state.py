@@ -1,8 +1,8 @@
 """Canonical per-game Elo priors for original T-60 NBA feature rows.
 
-This boundary binds and recomputes each probability from supplied pregame ratings. It
-does not prove that those ratings were replayed from strictly prior historical results.
-A future in-house replay or licensed connector must establish that upstream lineage.
+This file alone binds and recomputes each probability from supplied pregame ratings.
+``nba_elo_replay`` proves the deterministic causal replay; the licensed connector must
+still prove complete schedule coverage and raw team/site derivation.
 """
 
 from __future__ import annotations

@@ -29,6 +29,7 @@ from forecastfm.nba_feature_rows import (
     build_local_rich_feature_row,
     build_tinker_rich_feature_row,
     read_nba_feature_rows_jsonl,
+    read_nba_feature_rows_jsonl_bytes,
     write_nba_feature_rows_jsonl,
 )
 from forecastfm.nba_rich import (
@@ -96,6 +97,9 @@ def _bundle() -> NbaEvidenceBundle:
     game = CohortGame(
         question_id="nba-rich-1",
         source_game_id="provider-game-1",
+        team_id="Team",
+        opponent_id="Opponent",
+        site="neutral",
         matchup="Team vs Opponent",
         outcomes=("team", "opponent"),
         forecast_deadline=CUTOFF,
@@ -159,12 +163,17 @@ def test_feature_rows_round_trip_as_canonical_original_only_jsonl(tmp_path: Path
         elo=_elo(),
         action_at=ACTION_AT,
     )
-    second = replace(first, question_id="nba-rich-2")
+    second = replace(
+        first,
+        question_id="nba-rich-2",
+        source_game_id="provider-game-2",
+    )
     path = tmp_path / "features.jsonl"
 
     write_nba_feature_rows_jsonl(path, (first, second))
 
     assert read_nba_feature_rows_jsonl(path) == (first, second)
+    assert read_nba_feature_rows_jsonl_bytes(path.read_bytes()) == (first, second)
     assert path.read_text(encoding="utf-8") == "".join(
         f"{canonical_json(row.canonical_payload())}\n" for row in (first, second)
     )

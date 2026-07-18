@@ -483,11 +483,17 @@ def _manifest(build: _Build) -> dict[str, object]:
                 "licensed point-in-time travel data",
                 "licensed timestamped availability and expected-lineup data",
                 "roster and player-level rolling metrics",
+                "independently reviewed provider inventory passing bounded conformance",
                 (
                     "reviewed production connector deriving features and final scores from "
                     "retained raw bytes"
                 ),
-                "deterministic Elo replay from strictly prior resolved games",
+                "licensed complete-schedule artifact for deterministic Elo replay",
+                "fitted production 11-feature tabular model and answer-free forecast lock",
+                (
+                    "sealed, externally precommitted evaluation pack passing both recomputed "
+                    "Elo-relative gates"
+                ),
                 "signed source terms explicitly allowing Tinker processing",
                 "at least two prospectively frozen evaluation seasons",
             ],

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from math import isfinite
 
 from forecastfm.integrity import canonical_sha256
 from forecastfm.nba_evidence import (
@@ -12,6 +11,7 @@ from forecastfm.nba_evidence import (
     NbaEvidenceBundle,
     NbaEvidenceError,
     local_numeric_feature_vector,
+    require_canonical_float,
     tinker_numeric_feature_vector,
 )
 
@@ -298,7 +298,8 @@ def _require_feature_records(
 
 
 def _require_side_value(value: float, spec: NbaFeatureSpec) -> None:
-    if not isfinite(value) or value < spec.minimum or value > spec.maximum:
+    require_canonical_float(value, spec.name)
+    if value < spec.minimum or value > spec.maximum:
         raise NbaEvidenceError(f"{spec.name} lies outside its declared per-team range")
     if spec.unit == "indicator" and value not in (0.0, 1.0):
         raise NbaEvidenceError(f"{spec.name} must be zero or one")
@@ -311,8 +312,9 @@ def _require_difference_values(
     if len(values) != len(specs):
         raise NbaEvidenceError("richer NBA feature count is invalid")
     for value, spec in zip(values, specs, strict=True):
+        require_canonical_float(value, spec.name)
         maximum_difference = spec.maximum - spec.minimum
-        if not isfinite(value) or abs(value) > maximum_difference:
+        if abs(value) > maximum_difference:
             raise NbaEvidenceError(f"{spec.name} difference lies outside its declared range")
         if spec.unit == "indicator" and value not in (-1.0, 0.0, 1.0):
             raise NbaEvidenceError(f"{spec.name} difference must be minus one, zero, or one")

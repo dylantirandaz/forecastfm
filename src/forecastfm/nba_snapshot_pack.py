@@ -228,11 +228,18 @@ def write_snapshot_pack(snapshots: Iterable[NbaSnapshot], path: Path) -> None:
 def load_snapshot_pack(path: Path) -> NbaSnapshotIndex:
     """Load a local canonical JSONL pack without making network requests."""
     try:
-        text = path.read_text(encoding="utf-8")
-    except UnicodeDecodeError as error:
-        raise SnapshotPackError("snapshot pack must be UTF-8") from error
+        value = path.read_bytes()
     except OSError as error:
         raise SnapshotPackError("cannot read snapshot pack") from error
+    return load_snapshot_pack_bytes(value)
+
+
+def load_snapshot_pack_bytes(value: bytes) -> NbaSnapshotIndex:
+    """Load canonical snapshot-pack bytes without making network requests."""
+    try:
+        text = value.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise SnapshotPackError("snapshot pack must be UTF-8") from error
     if text and not text.endswith("\n"):
         raise SnapshotPackError("snapshot pack must end with a newline")
     snapshots = tuple(

@@ -10,6 +10,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Literal
 
 from forecastfm.integrity import canonical_json
 from forecastfm.json_utils import (
@@ -29,13 +30,19 @@ from forecastfm.nba_snapshot_pack import (
 from forecastfm.outcome import OPPONENT_LABEL, TEAM_LABEL
 from forecastfm.tinker_data import OutcomeTrainingRecord
 
-NBA_RESOLUTION_SCHEMA_VERSION = 1
+NBA_RESOLUTION_SCHEMA_VERSION = 2
+
+type NbaResolutionSite = Literal["home", "away", "neutral"]
 
 _HASH_CHARACTERS = frozenset("0123456789abcdef")
+_ALLOWED_SITES = frozenset({"home", "away", "neutral"})
 _RECORD_KEYS = {
     "schema_version",
     "question_id",
     "source_game_id",
+    "team_id",
+    "opponent_id",
+    "site",
     "team_score",
     "opponent_score",
     "resolved_at",
@@ -50,10 +57,13 @@ class NbaResolutionError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class NbaResolution:
-    """One final score derived from an independently retained source snapshot."""
+    """One claimed final score structurally linked to retained snapshot metadata."""
 
     question_id: str
     source_game_id: str
+    team_id: str
+    opponent_id: str
+    site: NbaResolutionSite
     team_score: int
     opponent_score: int
     resolved_at: datetime
@@ -65,6 +75,12 @@ class NbaResolution:
         if self.question_id.endswith(SIDE_SWAP_SUFFIX):
             raise NbaResolutionError("resolution question_id must identify an original game")
         _require_text(self.source_game_id, "source_game_id")
+        _require_text(self.team_id, "team_id")
+        _require_text(self.opponent_id, "opponent_id")
+        if self.team_id == self.opponent_id:
+            raise NbaResolutionError("resolution team_id and opponent_id must differ")
+        if self.site not in _ALLOWED_SITES:
+            raise NbaResolutionError("resolution site must be home, away, or neutral")
         _require_score(self.team_score, "team_score")
         _require_score(self.opponent_score, "opponent_score")
         if self.team_score == self.opponent_score:
@@ -85,7 +101,7 @@ def write_nba_resolutions_jsonl(
     *,
     snapshot_index: NbaSnapshotIndex,
 ) -> None:
-    """Create a canonical resolution file after binding every record to raw bytes."""
+    """Create a canonical resolution file after validating snapshot linkage."""
     checked = _validate_resolution_collection(tuple(resolutions), snapshot_index)
     try:
         with path.open("x", encoding="utf-8", newline="") as file:
@@ -103,8 +119,21 @@ def read_nba_resolutions_jsonl(
 ) -> tuple[NbaResolution, ...]:
     """Load canonical resolutions and rebind each one to its latest source snapshot."""
     try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as error:
+        value = path.read_bytes()
+    except OSError as error:
+        raise NbaResolutionError("cannot read NBA resolution JSONL") from error
+    return read_nba_resolutions_jsonl_bytes(value, snapshot_index=snapshot_index)
+
+
+def read_nba_resolutions_jsonl_bytes(
+    value: bytes,
+    *,
+    snapshot_index: NbaSnapshotIndex,
+) -> tuple[NbaResolution, ...]:
+    """Load canonical resolution bytes and bind them to source snapshots."""
+    try:
+        text = value.decode("utf-8")
+    except UnicodeDecodeError as error:
         raise NbaResolutionError("cannot read NBA resolution JSONL") from error
 
     resolutions: list[NbaResolution] = []
@@ -193,6 +222,16 @@ def _require_bundle_alignment(
     for bundle, resolution in zip(bundles, resolutions, strict=True):
         if bundle.game.source_game_id != resolution.source_game_id:
             raise NbaResolutionError("resolution source_game_id differs from its original bundle")
+        if (
+            resolution.team_id,
+            resolution.opponent_id,
+            resolution.site,
+        ) != (
+            bundle.game.team_id,
+            bundle.game.opponent_id,
+            bundle.game.site,
+        ):
+            raise NbaResolutionError("resolution orientation differs from its original bundle")
         if resolution.resolved_at <= bundle.game.scheduled_tipoff:
             raise NbaResolutionError("resolution must occur after the frozen scheduled tipoff")
 
@@ -222,6 +261,9 @@ def _resolution_to_payload(resolution: NbaResolution) -> dict[str, object]:
         "schema_version": NBA_RESOLUTION_SCHEMA_VERSION,
         "question_id": resolution.question_id,
         "source_game_id": resolution.source_game_id,
+        "team_id": resolution.team_id,
+        "opponent_id": resolution.opponent_id,
+        "site": resolution.site,
         "team_score": resolution.team_score,
         "opponent_score": resolution.opponent_score,
         "resolved_at": _utc_text(resolution.resolved_at),
@@ -238,6 +280,9 @@ def _resolution_from_payload(payload: Mapping[str, object]) -> NbaResolution:
     return NbaResolution(
         question_id=_string_field(payload, "question_id"),
         source_game_id=_string_field(payload, "source_game_id"),
+        team_id=_string_field(payload, "team_id"),
+        opponent_id=_string_field(payload, "opponent_id"),
+        site=_site_field(payload),
         team_score=_integer_field(payload, "team_score"),
         opponent_score=_integer_field(payload, "opponent_score"),
         resolved_at=_time_field(payload, "resolved_at"),
@@ -255,6 +300,17 @@ def _integer_field(payload: Mapping[str, object], field_name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise JsonFormatError(f"{field_name} must be an integer")
     return value
+
+
+def _site_field(payload: Mapping[str, object]) -> NbaResolutionSite:
+    value = _string_field(payload, "site")
+    if value == "home":
+        return "home"
+    if value == "away":
+        return "away"
+    if value == "neutral":
+        return "neutral"
+    raise JsonFormatError("site must be home, away, or neutral")
 
 
 def _time_field(payload: Mapping[str, object], field_name: str) -> datetime:

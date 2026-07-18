@@ -15,6 +15,7 @@ from forecastfm.nba_snapshot_pack import (
     NbaSnapshotMetadata,
     SnapshotPackError,
     load_snapshot_pack,
+    load_snapshot_pack_bytes,
     snapshot_metadata_sha256,
     write_snapshot_pack,
 )
@@ -97,6 +98,7 @@ def test_snapshot_pack_round_trip_preserves_exact_bytes_and_canonical_order(
     loaded = load_snapshot_pack(path)
 
     assert loaded.snapshots == (first, second)
+    assert load_snapshot_pack_bytes(path.read_bytes()) == loaded
     assert loaded.snapshots[0].payload == first.payload
     assert isinstance(loaded.snapshots[0].metadata.rights, SourceRights)
     assert loaded.snapshots[0].metadata.rights == first.metadata.rights
@@ -111,6 +113,11 @@ def test_snapshot_pack_round_trip_preserves_exact_bytes_and_canonical_order(
         json.dumps(json.loads(line), sort_keys=True, separators=(",", ":")) for line in lines
     )
     assert all(line == canonical for line, canonical in zip(lines, canonical_lines, strict=True))
+
+
+def test_snapshot_pack_bytes_reject_non_utf8() -> None:
+    with pytest.raises(SnapshotPackError, match="must be UTF-8"):
+        load_snapshot_pack_bytes(b"\xff")
 
 
 def test_payload_hash_and_source_versions_are_fail_closed() -> None:

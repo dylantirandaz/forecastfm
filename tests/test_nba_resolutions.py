@@ -21,6 +21,7 @@ from forecastfm.nba_resolutions import (
     NbaResolution,
     NbaResolutionError,
     read_nba_resolutions_jsonl,
+    read_nba_resolutions_jsonl_bytes,
     validate_outcome_training_labels,
     write_nba_resolutions_jsonl,
 )
@@ -96,6 +97,9 @@ def _resolution(
     return NbaResolution(
         question_id=question_id,
         source_game_id=f"provider-{question_id}",
+        team_id="Team",
+        opponent_id="Opponent",
+        site="neutral",
         team_score=team_score,
         opponent_score=opponent_score,
         resolved_at=resolved_at,
@@ -113,6 +117,9 @@ def _bundle(question_id: str) -> NbaEvidenceBundle:
     game = CohortGame(
         question_id=question_id,
         source_game_id=f"provider-{question_id}",
+        team_id="Team",
+        opponent_id="Opponent",
+        site="neutral",
         matchup="Team vs Opponent",
         outcomes=NBA_OUTCOMES,
         forecast_deadline=CUTOFF,
@@ -167,11 +174,19 @@ def test_resolution_jsonl_round_trip_is_canonical_create_only_and_ordered(
     write_nba_resolutions_jsonl(path, resolutions, snapshot_index=index)
 
     assert read_nba_resolutions_jsonl(path, snapshot_index=index) == resolutions
+    assert read_nba_resolutions_jsonl_bytes(path.read_bytes(), snapshot_index=index) == resolutions
     lines = path.read_text(encoding="utf-8").splitlines()
     assert all(line == canonical_json(json.loads(line)) for line in lines)
     assert [json.loads(line)["question_id"] for line in lines] == ["nba-2", "nba-1"]
     with pytest.raises(NbaResolutionError, match="already exists"):
         write_nba_resolutions_jsonl(path, resolutions, snapshot_index=index)
+
+
+def test_resolution_bytes_reject_non_utf8() -> None:
+    index = NbaSnapshotIndex((_snapshot("final:nba-1"),))
+
+    with pytest.raises(NbaResolutionError, match="cannot read NBA resolution JSONL"):
+        read_nba_resolutions_jsonl_bytes(b"\xff", snapshot_index=index)
 
 
 @pytest.mark.parametrize(
@@ -349,6 +364,15 @@ def test_validator_requires_exact_bundle_order_game_id_tipoff_and_complete_pairs
         validate_outcome_training_labels(
             bundles,
             (replace(first, source_game_id="wrong-game"), second),
+            records,
+            snapshot_index=index,
+            action_at=ACTION_AT,
+        )
+
+    with pytest.raises(NbaResolutionError, match="orientation differs"):
+        validate_outcome_training_labels(
+            bundles,
+            (replace(first, team_id="wrong-team"), second),
             records,
             snapshot_index=index,
             action_at=ACTION_AT,

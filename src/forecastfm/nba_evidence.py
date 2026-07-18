@@ -6,7 +6,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from math import isfinite
+from math import copysign, isfinite
 from typing import Literal, Protocol
 
 from forecastfm.integrity import canonical_json, canonical_sha256
@@ -77,6 +77,14 @@ def _require_utc(value: datetime, field_name: str) -> None:
 def _utc_text(value: datetime) -> str:
     _require_utc(value, "datetime")
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def require_canonical_float(value: object, field_name: str) -> None:
+    """Require a finite JSON float without a signed-zero encoding ambiguity."""
+    if not isinstance(value, float) or not isfinite(value):
+        raise NbaEvidenceError(f"{field_name} must be a finite float")
+    if value == 0.0 and copysign(1.0, value) < 0.0:
+        raise NbaEvidenceError(f"{field_name} cannot use negative zero")
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,8 +179,8 @@ class NbaEvidenceRecord:
         _require_text(self.record_id, "record_id")
         if _FEATURE_NAME_PATTERN.fullmatch(self.feature_name) is None:
             raise NbaEvidenceError("feature_name must be lowercase snake case")
-        if not isfinite(self.team_value) or not isfinite(self.opponent_value):
-            raise NbaEvidenceError("evidence values must be finite")
+        require_canonical_float(self.team_value, "team_value")
+        require_canonical_float(self.opponent_value, "opponent_value")
         _require_utc(self.available_at, "available_at")
         if self.kind not in _EVIDENCE_KINDS:
             raise NbaEvidenceError("unsupported evidence kind")
@@ -275,6 +283,9 @@ def evidence_bundle_sha256(bundle: NbaEvidenceBundle) -> str:
             "game": {
                 "question_id": bundle.game.question_id,
                 "source_game_id": bundle.game.source_game_id,
+                "team_id": bundle.game.team_id,
+                "opponent_id": bundle.game.opponent_id,
+                "site": bundle.game.site,
                 "matchup": bundle.game.matchup,
                 "outcomes": list(bundle.game.outcomes),
                 "forecast_deadline": _utc_text(bundle.game.forecast_deadline),
