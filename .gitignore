@@ -1,5 +1,6 @@
 .DS_Store
 .env
+.sportsdataio.env
 .pytest_cache/
 .ruff_cache/
 .venv/
@@ -19,3 +20,12 @@ data/processed/outcome_v1/*
 data/processed/outcome_v2/*
 !data/processed/outcome_v2/manifest.json
 examples/generated/
+
+# Private project handoff
+/context.md
+
+# Private vendor samples
+/Bojan Bogdanovic's 2024 Season Game Logsjson
+/Box Scores from 2024-01-20json
+/Dallas Mavericks 2024 Season Statsjson
+/Starting Lineups from 2024-01-29json
