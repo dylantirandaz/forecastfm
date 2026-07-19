@@ -7,7 +7,6 @@ import pytest
 from forecastfm.nba_arenas import home_arena
 from forecastfm.nba_pbp import PbpGame, PlayerGameLine, TeamGameStats
 from forecastfm.nba_season_games import (
-    NbaSeasonGamesError,
     ScheduleEntry,
     join_season_games,
 )
@@ -82,9 +81,11 @@ def test_join_pairs_games_in_id_order() -> None:
     assert joined[0].arena.arena_name == "Madison Square Garden"
 
 
-def test_join_rejects_pair_count_mismatch() -> None:
-    with pytest.raises(NbaSeasonGamesError):
-        join_season_games([pbp_game_fixture(22100001)], [])
+def test_join_excludes_pair_count_mismatch() -> None:
+    joined, notes = join_season_games([pbp_game_fixture(22100001)], [])
+    assert joined == []
+    assert len(notes) == 1
+    assert "excluded" in notes[0]
 
 
 def _context(day: date, home: bool = True) -> GameContext:

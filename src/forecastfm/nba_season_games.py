@@ -17,10 +17,6 @@ from forecastfm.nba_injury_report import ET_ZONE
 from forecastfm.nba_pbp import PbpGame
 
 
-class NbaSeasonGamesError(ValueError):
-    """Raised when the schedule join cannot be made exactly."""
-
-
 @dataclass(frozen=True, slots=True)
 class SeasonGame:
     """One dated, located, fully derived regular-season game."""
@@ -64,45 +60,47 @@ def join_season_games(
 ) -> tuple[list[SeasonGame], list[str]]:
     """Join one season's play-by-play games with its report schedule.
 
-    Returns the joined games sorted by (date, tipoff, game ID) plus human-readable notes for
-    games present on exactly one side. Raises when a matchup pair's game counts disagree.
+    Returns the joined games sorted by (date, tipoff, game ID) plus notes. Matchup pairs whose
+    play-by-play and scheduled counts disagree (play-by-play structural rejections, unresolved
+    postponement ambiguity) are excluded from the cohort and disclosed in the notes, never
+    silently repaired or assigned an ambiguous date.
     """
     pbp_by_pair = _index_pbp(pbp_games)
     schedule_by_pair = _index_schedule(schedule)
-    joined: list[SeasonGame] = [
-        _join_one(game, entry)
-        for pair in sorted(set(pbp_by_pair) | set(schedule_by_pair))
-        for game, entry in _paired(pair, pbp_by_pair, schedule_by_pair)
-    ]
+    joined: list[SeasonGame] = []
+    notes: list[str] = []
+    excluded_games: set[int] = set()
+    excluded_entries: set[tuple[date, str, str]] = set()
+    for pair in sorted(set(pbp_by_pair) | set(schedule_by_pair)):
+        games = pbp_by_pair.get(pair, [])
+        entries = schedule_by_pair.get(pair, [])
+        if len(games) != len(entries):
+            notes.append(
+                f"matchup {pair[0]}@{pair[1]} excluded: {len(games)} play-by-play games "
+                f"versus {len(entries)} scheduled dates"
+            )
+            excluded_games.update(game.game_id for game in games)
+            excluded_entries.update(
+                (entry.game_date, entry.away_abbreviation, entry.home_abbreviation)
+                for entry in entries
+            )
+            continue
+        for game, entry in zip(games, entries, strict=True):
+            joined.append(_join_one(game, entry))
     joined.sort(key=lambda game: (game.game_date, game.tipoff, game.game_id))
     schedule_keys = {(e.game_date, e.away_abbreviation, e.home_abbreviation) for e in schedule}
     joined_keys = {(g.game_date, g.away_abbreviation, g.home_abbreviation) for g in joined}
     joined_ids = {joined_game.game_id for joined_game in joined}
-    notes: list[str] = [
+    notes.extend(
         f"play-by-play game {game.game_id} has no schedule match"
         for game in pbp_games
-        if game.game_id not in joined_ids
-    ]
+        if game.game_id not in joined_ids and game.game_id not in excluded_games
+    )
     notes.extend(
         f"scheduled game {key[1]}@{key[2]} on {key[0]} has no play-by-play match"
-        for key in sorted(schedule_keys - joined_keys)
+        for key in sorted(schedule_keys - joined_keys - excluded_entries)
     )
     return joined, notes
-
-
-def _paired(
-    pair: tuple[str, str],
-    pbp_by_pair: dict[tuple[str, str], list[PbpGame]],
-    schedule_by_pair: dict[tuple[str, str], list[ScheduleEntry]],
-) -> list[tuple[PbpGame, ScheduleEntry]]:
-    games = pbp_by_pair.get(pair, [])
-    entries = schedule_by_pair.get(pair, [])
-    if len(games) != len(entries):
-        raise NbaSeasonGamesError(
-            f"matchup {pair[0]}@{pair[1]} has {len(games)} play-by-play games "
-            f"but {len(entries)} scheduled dates"
-        )
-    return list(zip(games, entries, strict=True))
 
 
 def _join_one(game: PbpGame, entry: ScheduleEntry) -> SeasonGame:

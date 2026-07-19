@@ -133,11 +133,22 @@ def _read_rows(rows_path: Path) -> tuple[InjuryReportRow, ...]:
 def schedule_from_injury_index(
     snapshots: Iterable[InjurySnapshot],
 ) -> list[tuple[date, str, str, tuple[int, int]]]:
-    """Extract (date, away, home, clock) entries from report rows' own game dates."""
+    """Extract (date, away, home, clock) entries from report rows' own game dates.
+
+    Postponed games are listed on their original date and then vanish from later same-day
+    snapshots, so an entry survives only when the game's date still lists it in that date's
+    final retained snapshot.
+    """
+    by_report_date: dict[date, list[InjurySnapshot]] = {}
+    for snapshot in snapshots:
+        by_report_date.setdefault(snapshot.report_time.date(), []).append(snapshot)
     seen: set[tuple[date, str, str, tuple[int, int]]] = set()
     schedule: list[tuple[date, str, str, tuple[int, int]]] = []
-    for snapshot in snapshots:
-        for row in snapshot.rows:
+    for report_date, day_snapshots in sorted(by_report_date.items()):
+        final_snapshot = max(day_snapshots, key=lambda snapshot: snapshot.report_time)
+        for row in final_snapshot.rows:
+            if row.game_date != report_date:
+                continue
             away, home = matchup_teams(row.matchup)
             key = (row.game_date, away, home, row.game_clock_et)
             if key not in seen:
