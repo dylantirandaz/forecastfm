@@ -105,7 +105,7 @@ _EARTH_RADIUS_MILES = 3958.7613
 # stats.nba.com regular-season play-by-play archive, so it is excluded from the prototype
 # cohort by declaration here rather than silently dropping the pair's regular meeting.
 EXCLUDED_CUP_FINALS: frozenset[tuple[date, str, str]] = frozenset(
-    {(date(2024, 12, 17), "MIL", "OKC")}
+    {(date(2024, 12, 17), "MIL", "OKC"), (date(2025, 12, 16), "SAS", "NYK")}
 )
 
 

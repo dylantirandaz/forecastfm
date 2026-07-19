@@ -160,9 +160,10 @@ def _team_ids(header: dict[str, object]) -> dict[str, str]:
     for entry in competitors:
         competitor = require_object(entry, "competitor")
         team = require_object(required_field(competitor, "team"), "team")
-        team_id = require_string(required_field(team, "id"), "id")
+        team_id = require_string(team.get("id", ""), "id")
         abbreviation = require_string(required_field(team, "abbreviation"), "abbreviation")
-        teams[team_id] = map_abbreviation(abbreviation)
+        if team_id:
+            teams[team_id] = map_abbreviation(abbreviation)
     return teams
 
 
@@ -196,7 +197,9 @@ def _athletes(document: dict[str, object]) -> dict[str, tuple[str, str]]:
             for entry in require_list(stat_object.get("athletes", []), "athletes"):
                 entry_object = require_object(entry, "athletes[]")
                 athlete = require_object(required_field(entry_object, "athlete"), "athlete")
-                athlete_id = require_string(required_field(athlete, "id"), "id")
+                athlete_id = require_string(athlete.get("id", ""), "id")
+                if not athlete_id:
+                    continue
                 name = require_string(athlete.get("displayName", ""), "displayName")
                 athletes[athlete_id] = (name, team_abbr)
     return athletes

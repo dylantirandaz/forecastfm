@@ -16,7 +16,7 @@ from math import isfinite
 from pathlib import Path
 from random import Random
 
-from forecastfm.nba_pbp import StintRecord, read_pbp_games
+from forecastfm.nba_pbp import StintRecord, normalize_player_name, read_pbp_games
 
 NBA_RAPM_SCHEMA_VERSION = 1
 _MIN_STINT_POSSESSIONS = 0.5
@@ -112,6 +112,38 @@ def fit_season_ratings(
         for game in read_pbp_games(path, failures):
             stints.extend(game.stints)
     return fit_rapm_ratings(stints, config)
+
+
+def fit_season_ratings_by_name(
+    season_files: Mapping[int, Path],
+    season: int,
+    config: RapmFitConfig | None = None,
+    failures: list[str] | None = None,
+) -> dict[str, float]:
+    """Fit causal RAPM and key ratings by normalized player name.
+
+    Name keying bridges data sources with different player ID spaces (stats.nba.com IDs versus
+    ESPN athlete IDs); collisions merge into the more extreme rating and are rare enough to
+    ignore at team level.
+    """
+    local_failures: list[str] = failures if failures is not None else []
+    ratings = fit_season_ratings(season_files, season, config, local_failures)
+    names: dict[int, str] = {}
+    for prior in range(season - 3, season):
+        path = season_files.get(prior)
+        if path is None or not path.exists():
+            continue
+        for game in read_pbp_games(path, local_failures):
+            names.update(game.player_names)
+    by_name: dict[str, float] = {}
+    for player_id, rating in ratings.ratings.items():
+        name = names.get(player_id)
+        if name is None:
+            continue
+        key = " ".join(normalize_player_name(name))
+        if key not in by_name or abs(rating) > abs(by_name[key]):
+            by_name[key] = rating
+    return by_name
 
 
 def _prepare(stints: Sequence[StintRecord]) -> list[_Observation]:

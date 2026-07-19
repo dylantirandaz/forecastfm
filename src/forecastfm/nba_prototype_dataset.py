@@ -1,37 +1,23 @@
 """Build private-prototype model tables from season games, features, and Elo state.
 
-Home-perspective rows only: the side swap is the exact negation by construction. The Elo recipe
-is the frozen prototype choice (initial 1500, K 20, scale 400, home advantage 100, base 10,
-per-season reset, no carryover); it is disclosed in the manifest and must not be compared with
-FiveThirtyEight's carryover Elo. Neutral-site games carry zero home advantage. The schedule
-strength feature reads each prior game's pregame opponent rating from the same replay.
+Home-perspective rows only: the side swap is the exact negation by construction. The prototype
+Elo is the disclosed carryover margin-of-victory replay in ``nba_mov_elo``; neutral-site games
+carry zero home advantage. The schedule strength feature reads each prior game's pregame
+opponent rating from the same replay.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 
 from forecastfm.elo_residual import EloResidualRow
-from forecastfm.integrity import canonical_sha256
-from forecastfm.nba_arenas import is_neutral_site
-from forecastfm.nba_elo_replay import NbaEloRecipe, NbaEloReplayRow
-from forecastfm.nba_elo_state import NbaEloState
 from forecastfm.nba_feature_builder import GameFeatures
-from forecastfm.nba_resolutions import NbaResolution
 from forecastfm.nba_rich import NBA_LOCAL_HEALTH_FEATURE_NAMES, NBA_RICH_FEATURE_NAMES
 from forecastfm.nba_season_games import SeasonGame
 
 NBA_PROTOTYPE_DATASET_SCHEMA_VERSION = 1
-
-PROTOTYPE_ELO_RECIPE = NbaEloRecipe(
-    initial_rating=1500.0,
-    k_factor=20.0,
-    rating_scale=400.0,
-    home_advantage=100.0,
-)
-
-_RESOLUTION_LAG = timedelta(hours=3)
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,66 +39,14 @@ def question_id_for(game_id: int) -> str:
     return f"nba-{game_id}"
 
 
-def build_replay_inputs(
-    games: list[SeasonGame],
-    source_id: str,
-) -> tuple[list[NbaEloReplayRow], list[NbaResolution]]:
-    """Build Elo replay rows and resolutions for one season's joined games."""
-    snapshot_digest = canonical_sha256({"source_id": source_id, "games": len(games)})
-    rows: list[NbaEloReplayRow] = []
-    resolutions: list[NbaResolution] = []
-    for game in games:
-        neutral = is_neutral_site(game.game_date, game.away_abbreviation, game.home_abbreviation)
-        cutoff = game.tipoff - timedelta(minutes=60)
-        rows.append(
-            NbaEloReplayRow(
-                question_id=question_id_for(game.game_id),
-                source_game_id=str(game.game_id),
-                season=game.season_label,
-                team_id=game.home_abbreviation,
-                opponent_id=game.away_abbreviation,
-                site="neutral" if neutral else "home",
-                forecast_cutoff=cutoff,
-                scheduled_tipoff=game.tipoff,
-            )
-        )
-        resolutions.append(
-            NbaResolution(
-                question_id=question_id_for(game.game_id),
-                source_game_id=str(game.game_id),
-                team_id=game.home_abbreviation,
-                opponent_id=game.away_abbreviation,
-                site="neutral" if neutral else "home",
-                team_score=game.home_score,
-                opponent_score=game.away_score,
-                resolved_at=game.tipoff + _RESOLUTION_LAG,
-                source_id=source_id,
-                snapshot_metadata_sha256=snapshot_digest,
-            )
-        )
-    return rows, resolutions
-
-
-def elo_ratings_by_game(
-    states: list[NbaEloState],
-    games: list[SeasonGame],
-) -> dict[tuple[int, str], float]:
-    """Map (game, team) to pregame rating from replayed Elo states."""
-    ratings: dict[tuple[int, str], float] = {}
-    for state, game in zip(states, games, strict=True):
-        ratings[(game.game_id, game.home_abbreviation)] = state.team_rating
-        ratings[(game.game_id, game.away_abbreviation)] = state.opponent_rating
-    return ratings
-
-
 def build_prototype_rows(
     games: list[SeasonGame],
     features: list[GameFeatures],
-    states: list[NbaEloState],
+    home_probabilities: Mapping[int, float],
 ) -> list[PrototypeGameRow]:
-    """Assemble home-perspective model rows aligned to replayed Elo states."""
+    """Assemble home-perspective model rows aligned to replayed home probabilities."""
     rows: list[PrototypeGameRow] = []
-    for game, game_features, state in zip(games, features, states, strict=True):
+    for game, game_features in zip(games, features, strict=True):
         standard = _differences(game_features)
         health = (
             (
@@ -128,7 +62,7 @@ def build_prototype_rows(
                 game_id=game.game_id,
                 season=game.season_label,
                 game_date=game.game_date,
-                elo_home_probability=state.team_win_probability,
+                elo_home_probability=home_probabilities[game.game_id],
                 features_standard=standard,
                 features_health=health,
                 home_won=game.home_won,

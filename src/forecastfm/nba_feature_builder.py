@@ -146,7 +146,7 @@ def build_game_features(
     games: Iterable[SeasonGame],
     elo_ratings: Mapping[tuple[int, str], float],
     injury_snapshots: list[InjurySnapshot],
-    player_ratings: Mapping[int, float] | None = None,
+    player_ratings: Mapping[str, float] | None = None,
 ) -> tuple[list[GameFeatures], list[str]]:
     """Compute per-side features for one season in strict tipoff order.
 
@@ -189,7 +189,7 @@ class _HealthContext:
         self,
         snapshots: list[InjurySnapshot],
         notes: list[str],
-        player_ratings: Mapping[int, float] | None,
+        player_ratings: Mapping[str, float] | None,
     ) -> None:
         self.snapshots = snapshots
         self.notes = notes
@@ -245,14 +245,14 @@ def _side_health(
         for player_id, minutes in history.prior_game_minutes().items()
         if player_id in names
     }
-    raw_values = (
-        context.player_ratings if context.player_ratings is not None else history.rolling_values()
-    )
-    values = {
-        _name_key(names[player_id]): value
-        for player_id, value in raw_values.items()
-        if player_id in names
-    }
+    if context.player_ratings is not None:
+        values = context.player_ratings
+    else:
+        values = {
+            _name_key(names[player_id]): value
+            for player_id, value in history.rolling_values().items()
+            if player_id in names
+        }
     total_minutes = 0.0
     total_value = 0.0
     for row in side_rows:

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from forecastfm.nba_arenas import NbaArena, great_circle_miles, travel_time_zone_change
-from forecastfm.nba_pbp import PbpGame
+from forecastfm.nba_pbp import PbpGame, normalize_player_name
 
 NBA_TEAM_HISTORY_SCHEMA_VERSION = 1
 ROLLING_WINDOW_GAMES = 10
@@ -66,7 +66,12 @@ class _PlayedGame:
     minutes: dict[int, float]
     plus_minus: dict[int, int]
     seconds_by_player: dict[int, int]
+    player_names: dict[int, str]
     opponent_elo: float
+
+
+def _name_key(name: str) -> str:
+    return " ".join(normalize_player_name(name))
 
 
 class NbaTeamHistory:
@@ -80,12 +85,13 @@ class NbaTeamHistory:
     def features_for(
         self,
         context: GameContext,
-        player_values: Mapping[int, float] | None = None,
+        player_values: Mapping[str, float] | None = None,
     ) -> TeamSideFeatures:
         """Compute the standard side features from strictly prior games.
 
-        When ``player_values`` is supplied (for example causal RAPM), it replaces the raw
-        rolling plus-minus values; unseen players contribute zero per the no-history rule.
+        When ``player_values`` is supplied (for example causal RAPM keyed by normalized player
+        name), it replaces the raw rolling plus-minus values; unseen players contribute zero
+        per the no-history rule.
         """
         prior = self._games[-1] if self._games else None
         window = self._games[-ROLLING_WINDOW_GAMES:]
@@ -129,6 +135,7 @@ class NbaTeamHistory:
                 minutes={line.player_id: line.minutes_played for line in lines},
                 plus_minus={line.player_id: line.plus_minus for line in lines},
                 seconds_by_player={line.player_id: line.seconds_played for line in lines},
+                player_names=dict(game.player_names),
                 opponent_elo=opponent_elo,
             )
         )
@@ -221,15 +228,28 @@ class NbaTeamHistory:
             return 0.0
         return net_points / possessions * 100.0
 
-    def _player_value(self, player_values: Mapping[int, float] | None = None) -> float:
+    def _player_value(self, player_values: Mapping[str, float] | None = None) -> float:
         if not self._games:
             return 0.0
-        weights = self._games[-1].minutes
-        values = player_values if player_values is not None else self.rolling_values()
-        total_weight = sum(weights.values())
+        last_game = self._games[-1]
+        if player_values is None:
+            weights = last_game.minutes
+            values = self.rolling_values()
+            total_weight = sum(weights.values())
+            if total_weight <= 0.0:
+                return 0.0
+            weighted = sum(weights[player_id] * values.get(player_id, 0.0) for player_id in weights)
+            return weighted / total_weight
+        total_weight = 0.0
+        weighted = 0.0
+        for player_id, minutes in last_game.minutes.items():
+            name = last_game.player_names.get(player_id)
+            if name is None:
+                continue
+            total_weight += minutes
+            weighted += minutes * player_values.get(_name_key(name), 0.0)
         if total_weight <= 0.0:
             return 0.0
-        weighted = sum(weights[player_id] * values.get(player_id, 0.0) for player_id in weights)
         return weighted / total_weight
 
     def _schedule_strength(self, window: list[_PlayedGame]) -> float:
