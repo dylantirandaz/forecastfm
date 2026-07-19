@@ -49,7 +49,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     days = _date_range(args.start_date, args.end_date)
     references: list[EspnGameRef] = []
     for day in days:
-        payload = _fetch(ESPN_SCOREBOARD_URL.format(day=day), raw_dir / f"scoreboard-{day}.json")
+        compact = day.replace("-", "")
+        payload = _fetch(
+            ESPN_SCOREBOARD_URL.format(day=compact),
+            raw_dir / f"scoreboard-{day}.json",
+        )
         references.extend(parse_scoreboard(payload))
     references.sort(key=lambda reference: reference.date_utc)
     manifest_games: list[dict[str, object]] = []

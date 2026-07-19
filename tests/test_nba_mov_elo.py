@@ -44,11 +44,12 @@ def test_winner_rating_rises_loser_falls() -> None:
 
 
 def test_carryover_pulls_ratings_toward_mean() -> None:
-    one = replay_mov_elo([[_game(1)]])
-    two = replay_mov_elo([[_game(1)], [_game(2)]])
-    opening_two = two.ratings[(2, "HOM")]
-    final_one = 1500.0 + 0.75 * (one.ratings[(1, "HOM")] - 1500.0)
-    assert opening_two == pytest.approx(final_one)
+    replay = replay_mov_elo([[_game(1)], [_game(2)]])
+    expected_home = 1.0 / (1.0 + 10.0 ** (-0.25))
+    multiplier = 2.3978952727983707 * 2.2 / (0.001 * 100.0 + 2.2)
+    shift = 20.0 * multiplier * (1.0 - expected_home)
+    carried = 1500.0 + 0.75 * shift
+    assert replay.ratings[(2, "HOM")] == pytest.approx(carried)
 
 
 def test_upset_moves_ratings_more_than_expected_win() -> None:
