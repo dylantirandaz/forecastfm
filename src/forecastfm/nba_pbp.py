@@ -19,11 +19,25 @@ defensive. All conventions are disclosed here and in the dataset manifest.
 from __future__ import annotations
 
 import csv
+import unicodedata
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
 NBA_PBP_SCHEMA_VERSION = 1
+
+
+def normalize_player_name(name: str) -> tuple[str, ...]:
+    """Reduce a player name to a sorted tuple of casefolded, accent-free tokens."""
+    decomposed = unicodedata.normalize("NFKD", name)
+    stripped = "".join(
+        character for character in decomposed if not unicodedata.combining(character)
+    )
+    collapsed = stripped.replace(".", "").replace("'", "")
+    tokens = "".join(character if character.isalnum() else " " for character in collapsed).split()
+    return tuple(sorted(token.casefold() for token in tokens))
+
+
 NBASTATS_HEADER: tuple[str, ...] = (
     "GAME_ID",
     "EVENTNUM",

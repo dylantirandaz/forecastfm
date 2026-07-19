@@ -12,7 +12,6 @@ from the availability ablation only.
 from __future__ import annotations
 
 import json
-import unicodedata
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -23,6 +22,7 @@ from forecastfm.nba_injury_report import (
     InjuryReportRow,
     matchup_teams,
 )
+from forecastfm.nba_pbp import normalize_player_name
 from forecastfm.nba_season_games import SeasonGame
 from forecastfm.nba_team_history import GameContext, NbaTeamHistory, TeamSideFeatures
 
@@ -83,17 +83,6 @@ class InjurySnapshot:
 
     report_time: datetime
     rows: tuple[InjuryReportRow, ...]
-
-
-def normalize_player_name(name: str) -> tuple[str, ...]:
-    """Reduce a player name to a sorted tuple of casefolded, accent-free tokens."""
-    decomposed = unicodedata.normalize("NFKD", name)
-    stripped = "".join(
-        character for character in decomposed if not unicodedata.combining(character)
-    )
-    collapsed = stripped.replace(".", "").replace("'", "")
-    tokens = "".join(character if character.isalnum() else " " for character in collapsed).split()
-    return tuple(sorted(token.casefold() for token in tokens))
 
 
 def load_injury_index(archive_root: Path) -> list[InjurySnapshot]:
