@@ -73,6 +73,19 @@ class TeamGameStats:
 
 
 @dataclass(frozen=True, slots=True)
+class StintRecord:
+    """One uninterrupted interval with constant on-court lineups."""
+
+    home_players: tuple[int, ...]
+    away_players: tuple[int, ...]
+    seconds: int
+    home_points: int
+    away_points: int
+    home_possessions: float
+    away_possessions: float
+
+
+@dataclass(frozen=True, slots=True)
 class PbpGame:
     """One validated postgame derivation from a regular-season play-by-play stream."""
 
@@ -84,6 +97,7 @@ class PbpGame:
     team_stats: tuple[TeamGameStats, TeamGameStats]
     player_lines: tuple[PlayerGameLine, ...]
     player_names: dict[int, str]
+    stints: tuple[StintRecord, ...] = ()
 
     @property
     def season_label(self) -> int:
@@ -130,6 +144,11 @@ class _GameBuilder:
         self.period_first_sub: dict[int, str] = {}
         self.period_event_counts: dict[int, int] = {}
         self.player_names: dict[int, str] = {}
+        self.stints: list[StintRecord] = []
+        self.stint_start_remaining = 0
+        self.stint_start_away_score = 0
+        self.stint_start_home_score = 0
+        self.stint_counts: dict[str, list[int]] = {}
 
 
 def read_pbp_games(path: Path, failures: list[str] | None = None) -> Iterator[PbpGame]:
@@ -236,6 +255,7 @@ def _finish_period(builder: _GameBuilder) -> None:
         length = _PERIOD_SECONDS if builder.period <= 4 else _OVERTIME_SECONDS
         for player_id in team.on_court:
             builder.stint_open[player_id] = length
+    _open_stint_interval(builder, _PERIOD_SECONDS if builder.period <= 4 else _OVERTIME_SECONDS)
     buffered, builder.buffered = builder.buffered, []
     builder.period_participants = {}
     builder.period_first_sub = {}
@@ -243,6 +263,7 @@ def _finish_period(builder: _GameBuilder) -> None:
     for record in buffered:
         _consume_resolved(builder, record)
     _close_all_stints(builder, 0)
+    _close_stint_interval(builder, 0)
 
 
 def _resolve_lineup(
@@ -286,13 +307,49 @@ def _consume_resolved(builder: _GameBuilder, record: list[str]) -> None:
     msg_type = int(record[2])
     remaining = _parse_clock(record[6])
     if msg_type == 8:
+        _close_stint_interval(builder, remaining)
         _handle_substitution(builder, record, remaining)
+        _open_stint_interval(builder, remaining)
         return
     team = builder.teams.get(record[18])
     if team is not None:
-        _count_team_stat(team, msg_type)
+        _count_team_stat(builder, team, msg_type)
     _track_misses_and_rebounds(builder, msg_type, record)
     _update_score(builder, record)
+
+
+def _open_stint_interval(builder: _GameBuilder, remaining: int) -> None:
+    builder.stint_start_remaining = remaining
+    builder.stint_start_away_score = max(builder.away_score, 0)
+    builder.stint_start_home_score = max(builder.home_score, 0)
+    builder.stint_counts = {abbr: [0, 0, 0, 0] for abbr in builder.teams}
+
+
+def _close_stint_interval(builder: _GameBuilder, remaining: int) -> None:
+    seconds = builder.stint_start_remaining - remaining
+    if seconds <= 0:
+        return
+    home_abbr, away_abbr = builder.home_abbreviation, builder.away_abbreviation
+    if not home_abbr or not away_abbr:
+        return
+    home_counts = builder.stint_counts.get(home_abbr, [0, 0, 0, 0])
+    away_counts = builder.stint_counts.get(away_abbr, [0, 0, 0, 0])
+    builder.stints.append(
+        StintRecord(
+            home_players=tuple(sorted(builder.teams[home_abbr].on_court)),
+            away_players=tuple(sorted(builder.teams[away_abbr].on_court)),
+            seconds=seconds,
+            home_points=max(builder.home_score, 0) - builder.stint_start_home_score,
+            away_points=max(builder.away_score, 0) - builder.stint_start_away_score,
+            home_possessions=_stint_possessions(home_counts),
+            away_possessions=_stint_possessions(away_counts),
+        )
+    )
+
+
+def _stint_possessions(counts: list[int]) -> float:
+    fga, fta, oreb, tov = counts
+    return fga + 0.44 * fta - oreb + tov
 
 
 def _track_misses_and_rebounds(builder: _GameBuilder, msg_type: int, record: list[str]) -> None:
@@ -346,19 +403,31 @@ def _handle_substitution(builder: _GameBuilder, record: list[str], remaining: in
     builder.player_team[in_id] = team.abbreviation
 
 
-def _count_team_stat(team: _TeamState, msg_type: int) -> None:
+def _count_team_stat(builder: _GameBuilder, team: _TeamState, msg_type: int) -> None:
+    index = 0
     if msg_type in (1, 2):
         team.fga += 1
+        index = 0
     elif msg_type == 3:
         team.fta += 1
+        index = 1
     elif msg_type == 5:
         team.tov += 1
+        index = 3
+    else:
+        return
+    counts = builder.stint_counts.get(team.abbreviation)
+    if counts is not None:
+        counts[index] += 1
 
 
 def _handle_rebound(builder: _GameBuilder, team_abbr: str) -> None:
     team = builder.teams.get(team_abbr)
     if team is not None and team_abbr == builder.last_miss_team:
         team.oreb += 1
+        counts = builder.stint_counts.get(team_abbr)
+        if counts is not None:
+            counts[2] += 1
     builder.last_miss_team = ""
 
 
@@ -424,6 +493,7 @@ def _finalize(builder: _GameBuilder) -> PbpGame:
         team_stats=team_stats,
         player_lines=player_lines,
         player_names=dict(builder.player_names),
+        stints=tuple(builder.stints),
     )
 
 
