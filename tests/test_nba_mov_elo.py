@@ -1,0 +1,69 @@
+"""Tests for the carryover margin-of-victory Elo replay."""
+
+import pytest
+
+from forecastfm.nba_mov_elo import (
+    EloGameResult,
+    MovEloRecipe,
+    NbaMovEloError,
+    replay_mov_elo,
+)
+
+
+def _game(
+    game_id: int, home_score: int = 110, away_score: int = 100, neutral: bool = False
+) -> EloGameResult:
+    return EloGameResult(
+        game_id=game_id,
+        home_abbreviation="HOM",
+        away_abbreviation="AWY",
+        home_score=home_score,
+        away_score=away_score,
+        neutral=neutral,
+    )
+
+
+def test_equal_ratings_home_advantage() -> None:
+    replay = replay_mov_elo([[_game(1)]])
+    expected = 1.0 / (1.0 + 10.0 ** (-100.0 / 400.0))
+    assert replay.home_probability(1) == pytest.approx(expected)
+    assert replay.ratings[(1, "HOM")] == 1500.0
+    assert replay.ratings[(1, "AWY")] == 1500.0
+
+
+def test_neutral_site_zeroes_advantage() -> None:
+    replay = replay_mov_elo([[_game(1, neutral=True)]])
+    assert replay.home_probability(1) == pytest.approx(0.5)
+
+
+def test_winner_rating_rises_loser_falls() -> None:
+    replay = replay_mov_elo([[_game(1)]])
+    assert replay.ratings[(1, "HOM")] == 1500.0
+    ratings_after = replay_mov_elo([[_game(1)], [_game(2)]])
+    assert ratings_after.ratings[(2, "HOM")] != 1500.0
+
+
+def test_carryover_pulls_ratings_toward_mean() -> None:
+    one = replay_mov_elo([[_game(1)]])
+    two = replay_mov_elo([[_game(1)], [_game(2)]])
+    opening_two = two.ratings[(2, "HOM")]
+    final_one = 1500.0 + 0.75 * (one.ratings[(1, "HOM")] - 1500.0)
+    assert opening_two == pytest.approx(final_one)
+
+
+def test_upset_moves_ratings_more_than_expected_win() -> None:
+    replay = replay_mov_elo([[_game(1, home_score=130, away_score=90)], [_game(2)]])
+    assert replay.ratings[(2, "HOM")] > 1500.0
+    assert replay.ratings[(2, "AWY")] < 1500.0
+    expected = 1.0 / (1.0 + 10.0 ** (-100.0 / 400.0))
+    assert replay.home_probability(1) == pytest.approx(expected)
+
+
+def test_rejects_invalid_games() -> None:
+    with pytest.raises(NbaMovEloError):
+        replay_mov_elo([[_game(1, home_score=100, away_score=100)]])
+    with pytest.raises(NbaMovEloError):
+        MovEloRecipe(carryover=0.0)
+    replay = replay_mov_elo([[_game(1)]])
+    with pytest.raises(NbaMovEloError):
+        replay.home_probability(999)
