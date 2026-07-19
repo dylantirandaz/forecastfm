@@ -25,7 +25,7 @@ def _game(
 
 def test_equal_ratings_home_advantage() -> None:
     replay = replay_mov_elo([[_game(1)]])
-    expected = 1.0 / (1.0 + 10.0 ** (-100.0 / 400.0))
+    expected = 1.0 / (1.0 + 10.0 ** (-60.0 / 400.0))
     assert replay.home_probability(1) == pytest.approx(expected)
     assert replay.ratings[(1, "HOM")] == 1500.0
     assert replay.ratings[(1, "AWY")] == 1500.0
@@ -45,8 +45,8 @@ def test_winner_rating_rises_loser_falls() -> None:
 
 def test_carryover_pulls_ratings_toward_mean() -> None:
     replay = replay_mov_elo([[_game(1)], [_game(2)]])
-    expected_home = 1.0 / (1.0 + 10.0 ** (-0.25))
-    multiplier = 2.3978952727983707 * 2.2 / (0.001 * 100.0 + 2.2)
+    expected_home = 1.0 / (1.0 + 10.0 ** (-0.15))
+    multiplier = 2.3978952727983707 * 2.2 / (0.001 * 60.0 + 2.2)
     shift = 20.0 * multiplier * (1.0 - expected_home)
     carried = 1500.0 + 0.75 * shift
     assert replay.ratings[(2, "HOM")] == pytest.approx(carried)
@@ -56,7 +56,7 @@ def test_upset_moves_ratings_more_than_expected_win() -> None:
     replay = replay_mov_elo([[_game(1, home_score=130, away_score=90)], [_game(2)]])
     assert replay.ratings[(2, "HOM")] > 1500.0
     assert replay.ratings[(2, "AWY")] < 1500.0
-    expected = 1.0 / (1.0 + 10.0 ** (-100.0 / 400.0))
+    expected = 1.0 / (1.0 + 10.0 ** (-60.0 / 400.0))
     assert replay.home_probability(1) == pytest.approx(expected)
 
 

@@ -22,12 +22,16 @@ class NbaMovEloError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class MovEloRecipe:
-    """Frozen numerical choices for the carryover margin-of-victory replay."""
+    """Frozen numerical choices for the carryover margin-of-victory replay.
+
+    Home advantage is 60 Elo points, matching the modern home win rate of about 55 percent;
+    the historical 100-point value badly overstates home teams in the 2020s.
+    """
 
     initial_rating: float = 1500.0
     k_factor: float = 20.0
     rating_scale: float = 400.0
-    home_advantage: float = 100.0
+    home_advantage: float = 60.0
     carryover: float = 0.75
 
     def __post_init__(self) -> None:
