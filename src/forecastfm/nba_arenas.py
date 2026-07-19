@@ -100,6 +100,14 @@ _NEUTRAL_SITE_GAMES: dict[tuple[date, str, str], NbaArena] = {
 
 _EARTH_RADIUS_MILES = 3958.7613
 
+# The NBA Cup final is a standalone 83rd game for the finalists at a neutral venue and is not
+# part of the 82-game regular-season schedule. The 2024 final (Las Vegas) is absent from the
+# stats.nba.com regular-season play-by-play archive, so it is excluded from the prototype
+# cohort by declaration here rather than silently dropping the pair's regular meeting.
+EXCLUDED_CUP_FINALS: frozenset[tuple[date, str, str]] = frozenset(
+    {(date(2024, 12, 17), "MIL", "OKC")}
+)
+
 
 def home_arena(team_abbreviation: str, tipoff: datetime) -> NbaArena:
     """Return the home arena for one team at one tipoff, honoring arena moves."""

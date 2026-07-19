@@ -14,7 +14,13 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-from forecastfm.elo_residual import EloResidualFitConfig, EloResidualModel, fit_elo_residual
+from forecastfm.elo_residual import (
+    EloResidualFitConfig,
+    EloResidualModel,
+    EloResidualRow,
+    fit_elo_residual,
+)
+from forecastfm.nba_arenas import EXCLUDED_CUP_FINALS
 from forecastfm.nba_elo_replay import replay_nba_elo_states
 from forecastfm.nba_evaluation_gate import (
     NbaRecalibrationRow,
@@ -65,15 +71,15 @@ class _ScaledModel:
     """One fitted Elo-offset model with its frozen training-only RMS scales."""
 
     def __init__(self, model: EloResidualModel, scales: tuple[float, ...]) -> None:
-        self._model = model
-        self._scales = scales
+        self.model = model
+        self.scales = scales
 
     def probability(self, row: PrototypeGameRow, *, include_health: bool) -> float:
         residual = to_residual_row(row, include_health=include_health)
         scaled = tuple(
-            value / scale for value, scale in zip(residual.features, self._scales, strict=True)
+            value / scale for value, scale in zip(residual.features, self.scales, strict=True)
         )
-        return self._model.predict_probability(residual.elo_probability, scaled)
+        return self.model.predict_probability(residual.elo_probability, scaled)
 
 
 def main() -> int:
@@ -87,6 +93,7 @@ def main() -> int:
             tip_clock=clock,
         )
         for day, away, home, clock in schedule_from_injury_index(injury_index)
+        if (day, away, home) not in EXCLUDED_CUP_FINALS
     ]
     rows_by_season: dict[int, list[PrototypeGameRow]] = {}
     notes: list[str] = []
@@ -145,6 +152,14 @@ def _evaluate(
         "health_training_games": len(health_training),
         "health_evaluation_games": len(health_evaluation),
         "notes_count": len(notes),
+        "recalibration": {
+            "intercept": recalibrator.intercept,
+            "slope": recalibrator.slope,
+        },
+        "models": {
+            "standard": _model_payload(standard_model, include_health=False),
+            "health": _model_payload(health_model, include_health=True),
+        },
     }
     variants: dict[str, object] = {}
     for name, model, rows in (
@@ -181,13 +196,36 @@ def _evaluate(
 
 def _fit_variant(rows: list[PrototypeGameRow], *, include_health: bool) -> _ScaledModel:
     scales = fit_rms_scales(rows, include_health=include_health)
-    residual_rows = [to_residual_row(row, include_health=include_health) for row in rows]
+    residual_rows = [
+        EloResidualRow(
+            question_id=residual.question_id,
+            elo_probability=residual.elo_probability,
+            features=tuple(
+                value / scale for value, scale in zip(residual.features, scales, strict=True)
+            ),
+            outcome=residual.outcome,
+        )
+        for residual in (to_residual_row(row, include_health=include_health) for row in rows)
+    ]
     model = fit_elo_residual(
         residual_rows,
         feature_names(include_health=include_health),
         FIT_CONFIG,
     )
     return _ScaledModel(model, scales)
+
+
+def _model_payload(model: _ScaledModel, *, include_health: bool) -> dict[str, object]:
+    return {
+        "feature_names": list(feature_names(include_health=include_health)),
+        "weights": list(model.model.weights),
+        "rms_scales": list(model.scales),
+        "fit_config": {
+            "steps": FIT_CONFIG.steps,
+            "learning_rate": FIT_CONFIG.learning_rate,
+            "l2_penalty": FIT_CONFIG.l2_penalty,
+        },
+    }
 
 
 def _recalibration_row(row: PrototypeGameRow) -> NbaRecalibrationRow:

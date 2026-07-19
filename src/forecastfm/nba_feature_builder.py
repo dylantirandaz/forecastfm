@@ -142,20 +142,15 @@ def schedule_from_injury_index(
     by_report_date: dict[date, list[InjurySnapshot]] = {}
     for snapshot in snapshots:
         by_report_date.setdefault(snapshot.report_time.date(), []).append(snapshot)
-    seen: set[tuple[date, str, str, tuple[int, int]]] = set()
-    schedule: list[tuple[date, str, str, tuple[int, int]]] = []
+    latest_clock: dict[tuple[date, str, str], tuple[int, int]] = {}
     for report_date, day_snapshots in sorted(by_report_date.items()):
         final_snapshot = max(day_snapshots, key=lambda snapshot: snapshot.report_time)
         for row in final_snapshot.rows:
             if row.game_date != report_date:
                 continue
             away, home = matchup_teams(row.matchup)
-            key = (row.game_date, away, home, row.game_clock_et)
-            if key not in seen:
-                seen.add(key)
-                schedule.append(key)
-    schedule.sort()
-    return schedule
+            latest_clock[(row.game_date, away, home)] = row.game_clock_et
+    return [(day, away, home, clock) for (day, away, home), clock in sorted(latest_clock.items())]
 
 
 def build_game_features(
