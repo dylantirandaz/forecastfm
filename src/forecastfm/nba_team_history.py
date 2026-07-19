@@ -10,6 +10,7 @@ disclosed in the dataset manifest.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
@@ -76,8 +77,16 @@ class NbaTeamHistory:
         self.team_abbreviation = team_abbreviation
         self._games: list[_PlayedGame] = []
 
-    def features_for(self, context: GameContext) -> TeamSideFeatures:
-        """Compute the standard side features from strictly prior games."""
+    def features_for(
+        self,
+        context: GameContext,
+        player_values: Mapping[int, float] | None = None,
+    ) -> TeamSideFeatures:
+        """Compute the standard side features from strictly prior games.
+
+        When ``player_values`` is supplied (for example causal RAPM), it replaces the raw
+        rolling plus-minus values; unseen players contribute zero per the no-history rule.
+        """
         prior = self._games[-1] if self._games else None
         window = self._games[-ROLLING_WINDOW_GAMES:]
         return TeamSideFeatures(
@@ -90,7 +99,7 @@ class NbaTeamHistory:
             roster_continuity=self._roster_continuity(),
             expected_lineup_continuity=self._lineup_continuity(),
             rolling_team_net_rating=self._net_rating(window),
-            rolling_player_value=self._player_value(),
+            rolling_player_value=self._player_value(player_values),
             schedule_strength=self._schedule_strength(window),
         )
 
@@ -212,11 +221,11 @@ class NbaTeamHistory:
             return 0.0
         return net_points / possessions * 100.0
 
-    def _player_value(self) -> float:
+    def _player_value(self, player_values: Mapping[int, float] | None = None) -> float:
         if not self._games:
             return 0.0
         weights = self._games[-1].minutes
-        values = self.rolling_values()
+        values = player_values if player_values is not None else self.rolling_values()
         total_weight = sum(weights.values())
         if total_weight <= 0.0:
             return 0.0

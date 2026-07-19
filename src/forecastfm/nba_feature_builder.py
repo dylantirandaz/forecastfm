@@ -157,6 +157,7 @@ def build_game_features(
     games: Iterable[SeasonGame],
     elo_ratings: Mapping[tuple[int, str], float],
     injury_snapshots: list[InjurySnapshot],
+    player_ratings: Mapping[int, float] | None = None,
 ) -> tuple[list[GameFeatures], list[str]]:
     """Compute per-side features for one season in strict tipoff order.
 
@@ -166,6 +167,7 @@ def build_game_features(
     histories: dict[str, NbaTeamHistory] = {}
     features: list[GameFeatures] = []
     notes: list[str] = []
+    health_context = _HealthContext(injury_snapshots, notes, player_ratings)
     for game in games:
         away_history = histories.setdefault(
             game.away_abbreviation, NbaTeamHistory(game.away_abbreviation)
@@ -175,12 +177,12 @@ def build_game_features(
         )
         away_context = GameContext(game.game_date, game.tipoff, False, game.arena)
         home_context = GameContext(game.game_date, game.tipoff, True, game.arena)
-        health = _health_for_game(game, injury_snapshots, away_history, home_history, notes)
+        health = _health_for_game(game, health_context, away_history, home_history)
         features.append(
             GameFeatures(
                 game_id=game.game_id,
-                away=away_history.features_for(away_context),
-                home=home_history.features_for(home_context),
+                away=away_history.features_for(away_context, player_ratings),
+                home=home_history.features_for(home_context, player_ratings),
                 health=health,
             )
         )
@@ -191,18 +193,31 @@ def build_game_features(
     return features, notes
 
 
+class _HealthContext:
+    """Shared health-assembly inputs for one season pass."""
+
+    def __init__(
+        self,
+        snapshots: list[InjurySnapshot],
+        notes: list[str],
+        player_ratings: Mapping[int, float] | None,
+    ) -> None:
+        self.snapshots = snapshots
+        self.notes = notes
+        self.player_ratings = player_ratings
+
+
 def _health_for_game(
     game: SeasonGame,
-    snapshots: list[InjurySnapshot],
+    context: _HealthContext,
     away_history: NbaTeamHistory,
     home_history: NbaTeamHistory,
-    notes: list[str],
 ) -> tuple[tuple[float, float], tuple[float, float]] | None:
     cutoff = game.tipoff - timedelta(minutes=60)
     selected = next(
         (
             snapshot
-            for snapshot in reversed(snapshots)
+            for snapshot in reversed(context.snapshots)
             if snapshot.report_time.astimezone(UTC) <= cutoff
             and any(
                 row.game_date == game.game_date
@@ -213,10 +228,12 @@ def _health_for_game(
         None,
     )
     if selected is None:
-        notes.append(f"game {game.game_id} has no report snapshot at or before its T-60 cutoff")
+        context.notes.append(
+            f"game {game.game_id} has no report snapshot at or before its T-60 cutoff"
+        )
         return None
-    away = _side_health(selected.rows, game.away_abbreviation, away_history, game, notes)
-    home = _side_health(selected.rows, game.home_abbreviation, home_history, game, notes)
+    away = _side_health(selected.rows, game.away_abbreviation, away_history, game, context)
+    home = _side_health(selected.rows, game.home_abbreviation, home_history, game, context)
     return (away, home)
 
 
@@ -225,7 +242,7 @@ def _side_health(
     team_abbreviation: str,
     history: NbaTeamHistory,
     game: SeasonGame,
-    notes: list[str],
+    context: _HealthContext,
 ) -> tuple[float, float]:
     side_rows = [
         row
@@ -239,9 +256,12 @@ def _side_health(
         for player_id, minutes in history.prior_game_minutes().items()
         if player_id in names
     }
+    raw_values = (
+        context.player_ratings if context.player_ratings is not None else history.rolling_values()
+    )
     values = {
         _name_key(names[player_id]): value
-        for player_id, value in history.rolling_values().items()
+        for player_id, value in raw_values.items()
         if player_id in names
     }
     total_minutes = 0.0
@@ -251,7 +271,7 @@ def _side_health(
             continue
         key = _name_key(row.player_name)
         if key not in prior_minutes and key not in values:
-            notes.append(
+            context.notes.append(
                 f"game {game.game_id} team {team_abbreviation} has an unavailable row "
                 "with no play-by-play history; contributing zero"
             )

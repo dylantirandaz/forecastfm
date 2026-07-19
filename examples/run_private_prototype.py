@@ -43,6 +43,7 @@ from forecastfm.nba_prototype_dataset import (
     fit_rms_scales,
     to_residual_row,
 )
+from forecastfm.nba_rapm import fit_season_ratings
 from forecastfm.nba_season_games import ScheduleEntry, join_season_games
 from forecastfm.outcome_v2_config import outcome_v2_evaluation_policy
 from forecastfm.outcome_v2_metrics import (
@@ -57,6 +58,14 @@ INJURY_ARCHIVE = Path("data/raw/nba_injury_reports")
 OUTPUT_DIR = Path("data/processed/private_prototype")
 
 SEASON_FILES = {
+    2022: "nbastats_2021.csv",
+    2023: "nbastats_2022.csv",
+    2024: "nbastats_2023.csv",
+    2025: "nbastats_2024.csv",
+}
+RAPM_PRIOR_FILES = {
+    2020: "nbastats_2019.csv",
+    2021: "nbastats_2020.csv",
     2022: "nbastats_2021.csv",
     2023: "nbastats_2022.csv",
     2024: "nbastats_2023.csv",
@@ -123,7 +132,18 @@ def _build_season(
     replay_rows, resolutions = build_replay_inputs(joined, f"shufinskiy:{filename}")
     states = list(replay_nba_elo_states(replay_rows, resolutions, PROTOTYPE_ELO_RECIPE))
     ratings = elo_ratings_by_game(states, joined)
-    features, feature_notes = build_game_features(joined, ratings, injury_snapshots)
+    rapm_files = {
+        label: PBP_DIR / name
+        for label, name in RAPM_PRIOR_FILES.items()
+        if (PBP_DIR / name).exists()
+    }
+    rapm = fit_season_ratings(rapm_files, season, failures=failures)
+    features, feature_notes = build_game_features(
+        joined,
+        ratings,
+        injury_snapshots,
+        player_ratings=rapm.ratings,
+    )
     rows = build_prototype_rows(joined, features, states)
     return rows, failures + join_notes + feature_notes
 
