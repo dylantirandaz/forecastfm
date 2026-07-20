@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from forecastfm.nba_arenas import EXCLUDED_CUP_FINALS
 from forecastfm.nba_espn import EspnGameRef, convert_summary, parse_scoreboard, write_nbastats_csv
 
 ESPN_SCOREBOARD_URL = (
@@ -57,6 +58,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         references.extend(parse_scoreboard(payload))
     references.sort(key=lambda reference: reference.date_utc)
+    references = [reference for reference in references if not _is_excluded_cup_final(reference)]
     manifest_games: list[dict[str, object]] = []
     rows_all: list[list[str]] = []
     for index, reference in enumerate(references):
@@ -92,6 +94,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     print(json.dumps({"games": len(manifest_games), "csv": str(csv_path)}, indent=2))
     return 0
+
+
+def _is_excluded_cup_final(reference: EspnGameRef) -> bool:
+    tipoff_utc = datetime.fromisoformat(reference.date_utc.replace("Z", "+00:00"))
+    for offset in (0, 1):
+        key = (
+            (tipoff_utc - timedelta(days=offset)).date(),
+            reference.away_abbreviation,
+            reference.home_abbreviation,
+        )
+        if key in EXCLUDED_CUP_FINALS:
+            return True
+    return False
 
 
 def _fetch(url: str, target: Path) -> bytes:

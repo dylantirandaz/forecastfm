@@ -34,7 +34,43 @@ ESPN_TO_NBA_ABBREVIATION: dict[str, str] = {
     "SA": "SAS",
     "UTAH": "UTA",
     "PHO": "PHX",
+    "WSH": "WAS",
 }
+
+NBA_TEAM_ABBREVIATIONS: frozenset[str] = frozenset(
+    {
+        "ATL",
+        "BOS",
+        "BKN",
+        "CHA",
+        "CHI",
+        "CLE",
+        "DAL",
+        "DEN",
+        "DET",
+        "GSW",
+        "HOU",
+        "IND",
+        "LAC",
+        "LAL",
+        "MEM",
+        "MIA",
+        "MIL",
+        "MIN",
+        "NOP",
+        "NYK",
+        "OKC",
+        "ORL",
+        "PHI",
+        "PHX",
+        "POR",
+        "SAC",
+        "SAS",
+        "TOR",
+        "UTA",
+        "WAS",
+    }
+)
 
 _TYPE_MAP = {
     "made_shot": "1",
@@ -92,6 +128,8 @@ def parse_scoreboard(payload: bytes) -> list[EspnGameRef]:
     for event in require_list(required_field(document, "events"), "events"):
         event_object = require_object(event, "event")
         away_abbr, home_abbr = _competitors(event_object)
+        if away_abbr not in NBA_TEAM_ABBREVIATIONS or home_abbr not in NBA_TEAM_ABBREVIATIONS:
+            continue
         references.append(
             EspnGameRef(
                 event_id=require_string(required_field(event_object, "id"), "id"),
@@ -210,6 +248,9 @@ def _convert_play(play: dict[str, object], context: _ConversionContext) -> list[
     msg_type = _message_type(play, text)
     acting_abbr = _acting_team(play, context)
     player1, player2 = _players(msg_type, play.get("participants"), context.athletes)
+    if msg_type == _TYPE_MAP["substitution"]:
+        player1 = (player1[0], player1[1], player1[2] or acting_abbr)
+        player2 = (player2[0], player2[1], player2[2] or acting_abbr)
     if msg_type == _TYPE_MAP["free_throw"] and "miss" in text.lower():
         text = f"MISS {text}"
     home_score = int(require_float(play.get("homeScore", 0), "homeScore"))
