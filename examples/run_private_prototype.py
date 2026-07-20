@@ -174,6 +174,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         notes.extend(season_notes)
     training = [row for season in config.training_seasons for row in rows_by_season[season]]
     evaluation = [row for season in config.evaluation_seasons for row in rows_by_season[season]]
+    evaluation, bubble_excluded = _drop_metric_incompatible_rows(evaluation)
+    if bubble_excluded:
+        notes.append(
+            f"{bubble_excluded} bubble-window games excluded from the gate cohort: the frozen "
+            "metric season convention (year+1 from July) labels Aug 2020 games as season 2021 "
+            "while their game IDs label them 2020"
+        )
     excluded = _excluded_names(config)
     if excluded:
         training = _mask_rows(training, excluded)
@@ -185,6 +192,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     print(json.dumps(report, indent=2))
     return 0
+
+
+def _drop_metric_incompatible_rows(
+    rows: list[PrototypeGameRow],
+) -> tuple[list[PrototypeGameRow], int]:
+    """Drop rows whose game-date season convention conflicts with their label."""
+    kept = [
+        row
+        for row in rows
+        if (row.game_date.year + 1 if row.game_date.month >= 7 else row.game_date.year)
+        == row.season
+    ]
+    return kept, len(rows) - len(kept)
 
 
 def _mask_rows(
