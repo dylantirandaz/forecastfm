@@ -449,18 +449,12 @@ def _evaluate(
         health_model = _fit_variant(health_training, health_names, include_health=True)
         models_report["health"] = _model_payload(health_model, health_names)
         model_variants.append(("health", health_model, health_evaluation, health_names))
-    if excluded:
-        report["projected_variant"] = (
-            "skipped: --exclude-families masks the frozen standard features, "
-            "so the projected variant is disabled"
-        )
-    else:
-        projected_names = (*standard_names, "projected_rotation_value")
-        projected_training = [_projected_row(row, game_features) for row in training]
-        projected_evaluation = [_projected_row(row, game_features) for row in evaluation]
-        projected_model = _fit_variant(projected_training, projected_names, include_health=False)
-        models_report["projected"] = _model_payload(projected_model, projected_names)
-        model_variants.append(("projected", projected_model, projected_evaluation, projected_names))
+    projected_names = (*standard_names, "projected_rotation_value")
+    projected_training = [_projected_row(row, game_features) for row in training]
+    projected_evaluation = [_projected_row(row, game_features) for row in evaluation]
+    projected_model = _fit_variant(projected_training, projected_names, include_health=False)
+    models_report["projected"] = _model_payload(projected_model, projected_names)
+    model_variants.append(("projected", projected_model, projected_evaluation, projected_names))
     report["models"] = models_report
     for name, model, rows, _names in model_variants:
         include_health = name == "health"
