@@ -3,10 +3,13 @@
 This is the binding layer between the raw derivations and the frozen rich schema: it normalizes
 player names across the two sources (play-by-play uses ``First Last``, the official report uses
 ``Last, First``), selects the latest pre-T-60 report snapshot per game, and computes the two
-local-only availability aggregates per side. Reported players with no matching play-by-play
-history contribute zero, per the frozen no-history rule; their names are counted and disclosed
-in the manifest. Games with no pre-cutoff report at all get no health features and are excluded
-from the availability ablation only.
+local-only availability aggregates per side. Availability minutes are median expected minutes
+over each player's last ten appearances (a disclosed prototype variant of the frozen
+prior-game-minutes definition, so season-long absences are priced rather than zeroed).
+Reported players with no matching play-by-play history contribute zero, per the frozen
+no-history rule; their names are counted and disclosed in the manifest. Games with no
+pre-cutoff report at all get no health features and are excluded from the availability
+ablation only.
 """
 
 from __future__ import annotations
@@ -240,9 +243,10 @@ def _side_health(
         and matchup_teams(row.matchup) == (game.away_abbreviation, game.home_abbreviation)
     ]
     names = game.pbp.player_names
+    expected = history.expected_minutes()
     prior_minutes = {
         _name_key(names[player_id]): minutes
-        for player_id, minutes in history.prior_game_minutes().items()
+        for player_id, minutes in expected.items()
         if player_id in names
     }
     if context.player_ratings is not None:

@@ -10,6 +10,7 @@ disclosed in the dataset manifest.
 
 from __future__ import annotations
 
+import statistics
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -145,6 +146,21 @@ class NbaTeamHistory:
         if not self._games:
             return {}
         return self._games[-1].minutes
+
+    def expected_minutes(self) -> dict[int, float]:
+        """Return median minutes over each player's last ten appearances this season.
+
+        Appearance-based (missed games are skipped, not zeroed); genuinely no-history
+        players are absent and contribute zero downstream.
+        """
+        appearances: dict[int, list[float]] = {}
+        for game in self._games:
+            for player_id, minutes in game.minutes.items():
+                appearances.setdefault(player_id, []).append(minutes)
+        return {
+            player_id: statistics.median(values[-ROLLING_WINDOW_GAMES:])
+            for player_id, values in appearances.items()
+        }
 
     def rolling_values(self) -> dict[int, float]:
         """Return per-player rolling per-100 plus-minus over each player's ten prior games."""

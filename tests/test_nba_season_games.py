@@ -144,3 +144,12 @@ def test_lineup_continuity_full_overlap() -> None:
     features = history.features_for(_context(date(2021, 10, 23)))
     assert features.expected_lineup_continuity == 1.0
     assert 0.0 < features.roster_continuity <= 1.0
+
+
+def test_expected_minutes_uses_median_of_appearances() -> None:
+    history = NbaTeamHistory("NYK")
+    assert history.expected_minutes() == {}
+    _record(history, date(2021, 10, 19))
+    expected = history.expected_minutes()
+    assert len(expected) == 10
+    assert all(minutes == 24.0 for minutes in expected.values())
