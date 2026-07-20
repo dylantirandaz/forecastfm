@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import time
+import urllib.error
 import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -96,12 +97,20 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _fetch(url: str, target: Path) -> bytes:
     if target.exists():
         return target.read_bytes()
-    time.sleep(REQUEST_DELAY_SECONDS)
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        payload = response.read()
-    target.write_bytes(payload)
-    return payload
+    for attempt in range(3):
+        time.sleep(REQUEST_DELAY_SECONDS)
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                payload = response.read()
+        except (TimeoutError, urllib.error.URLError):
+            if attempt == 2:
+                raise
+            time.sleep(2.0 * (attempt + 1))
+        else:
+            target.write_bytes(payload)
+            return payload
+    raise RuntimeError("unreachable")
 
 
 def _date_range(start: str, end: str) -> list[str]:
