@@ -26,9 +26,11 @@ from nbainjuries import injury  # pyright: ignore[reportMissingTypeStubs]
 from forecastfm.nba_injury_report import (
     ET_ZONE,
     INJURY_REPORT_SCHEMA_VERSION,
+    ParsedInjuryReport,
     matchup_teams,
     rows_from_report_records,
 )
+from forecastfm.nba_injury_report_v1 import LegacyParseResult, parse_legacy_report
 
 DEFAULT_STORAGE_ROOT = Path("data/raw/nba_injury_reports")
 REQUEST_DELAY_SECONDS = 0.3
@@ -123,9 +125,15 @@ def _download_snapshot(slot: datetime, target: Path) -> bool:
 
 
 def _parse_snapshot(slot: datetime, target: Path, day_dir: Path) -> dict[str, object]:
-    raw_json = _GET_REPORTDATA(slot.replace(tzinfo=None), local=True, localdir=day_dir)
-    records = cast("list[dict[str, object]]", json.loads(raw_json))
-    parsed = rows_from_report_records(records, slot)
+    parsed: ParsedInjuryReport | LegacyParseResult
+    try:
+        raw_json = _GET_REPORTDATA(slot.replace(tzinfo=None), local=True, localdir=day_dir)
+        records = cast("list[dict[str, object]]", json.loads(raw_json))
+        parsed = rows_from_report_records(records, slot)
+        parser = "nbainjuries"
+    except Exception:  # nbainjuries rejects the pre-2020 nine-column layout
+        parsed = parse_legacy_report(target)
+        parser = "legacy_v1"
     games = {row.matchup for row in parsed.rows}
     rows_path = target.with_suffix(".rows.jsonl")
     with rows_path.open("w", encoding="utf-8") as handle:
@@ -149,7 +157,12 @@ def _parse_snapshot(slot: datetime, target: Path, day_dir: Path) -> dict[str, ob
                 )
                 + "\n"
             )
-    return {"rows": len(parsed.rows), "dropped_rows": parsed.dropped_rows, "games": len(games)}
+    return {
+        "rows": len(parsed.rows),
+        "dropped_rows": parsed.dropped_rows,
+        "games": len(games),
+        "parser": parser,
+    }
 
 
 def _snapshot_url(slot: datetime) -> str:
