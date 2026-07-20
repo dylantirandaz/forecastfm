@@ -98,6 +98,20 @@ _NEUTRAL_SITE_GAMES: dict[tuple[date, str, str], NbaArena] = {
     (date(2025, 1, 25), "IND", "SAS"): _ACCOR_ARENA,
 }
 
+# The 2019-20 season restart played every game at Walt Disney World (neutral). The window
+# covers the seeding games; play-in and playoff games there are out of the regular-season
+# cohort regardless.
+_BUBBLE_ARENA = NbaArena(
+    "ESPN Wide World of Sports Complex",
+    28.3416,
+    -81.5567,
+    "America/New_York",
+    _WIKIDATA,
+)
+_NEUTRAL_WINDOWS: tuple[tuple[date, date, NbaArena], ...] = (
+    (date(2020, 7, 30), date(2020, 8, 15), _BUBBLE_ARENA),
+)
+
 _EARTH_RADIUS_MILES = 3958.7613
 
 # The NBA Cup final is a standalone 83rd game for the finalists at a neutral venue and is not
@@ -125,10 +139,13 @@ def game_arena(
     home_abbreviation: str,
     tipoff: datetime,
 ) -> NbaArena:
-    """Return the arena for one game, applying dated neutral-site overrides."""
+    """Return the arena for one game, applying dated neutral-site overrides and windows."""
     override = _NEUTRAL_SITE_GAMES.get((game_date, away_abbreviation, home_abbreviation))
     if override is not None:
         return override
+    for start, end, arena in _NEUTRAL_WINDOWS:
+        if start <= game_date <= end:
+            return arena
     return home_arena(home_abbreviation, tipoff)
 
 
@@ -138,8 +155,10 @@ def neutral_site_games() -> tuple[tuple[date, str, str], ...]:
 
 
 def is_neutral_site(game_date: date, away_abbreviation: str, home_abbreviation: str) -> bool:
-    """Return whether one game is played at a declared neutral venue."""
-    return (game_date, away_abbreviation, home_abbreviation) in _NEUTRAL_SITE_GAMES
+    """Return whether one game is played at a declared neutral venue or window."""
+    if (game_date, away_abbreviation, home_abbreviation) in _NEUTRAL_SITE_GAMES:
+        return True
+    return any(start <= game_date <= end for start, end, _arena in _NEUTRAL_WINDOWS)
 
 
 def great_circle_miles(first: NbaArena, second: NbaArena) -> float:

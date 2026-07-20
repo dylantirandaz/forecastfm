@@ -63,6 +63,8 @@ INJURY_ARCHIVE = DATA_RAW / "nba_injury_reports"
 OUTPUT_DIR = Path("data/processed/private_prototype")
 
 SEASON_FILES = {
+    2020: DATA_RAW / "shufinskiy/nbastats_2019.csv",
+    2021: DATA_RAW / "shufinskiy/nbastats_2020.csv",
     2022: DATA_RAW / "shufinskiy/nbastats_2021.csv",
     2023: DATA_RAW / "shufinskiy/nbastats_2022.csv",
     2024: DATA_RAW / "shufinskiy/nbastats_2023.csv",
@@ -70,10 +72,16 @@ SEASON_FILES = {
     2026: DATA_RAW / "espn/espn_2025.csv",
 }
 WARMUP_FILES = {
+    2017: DATA_RAW / "shufinskiy/nbastats_2016.csv",
+    2018: DATA_RAW / "shufinskiy/nbastats_2017.csv",
+    2019: DATA_RAW / "shufinskiy/nbastats_2018.csv",
     2020: DATA_RAW / "shufinskiy/nbastats_2019.csv",
     2021: DATA_RAW / "shufinskiy/nbastats_2020.csv",
 }
 RAPM_PRIOR_FILES = {
+    2017: DATA_RAW / "shufinskiy/nbastats_2016.csv",
+    2018: DATA_RAW / "shufinskiy/nbastats_2017.csv",
+    2019: DATA_RAW / "shufinskiy/nbastats_2018.csv",
     2020: DATA_RAW / "shufinskiy/nbastats_2019.csv",
     2021: DATA_RAW / "shufinskiy/nbastats_2020.csv",
     2022: DATA_RAW / "shufinskiy/nbastats_2021.csv",
@@ -101,6 +109,8 @@ class _RunConfig:
     excluded_families: frozenset[str]
     output_dir: Path
     skip_health: bool
+    training_seasons: tuple[int, ...]
+    evaluation_seasons: tuple[int, ...]
 
 
 def _excluded_names(config: _RunConfig) -> frozenset[str]:
@@ -144,8 +154,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         rows_by_season[season] = rows
         game_features.update(season_features)
         notes.extend(season_notes)
-    training = [row for season in TRAINING_SEASONS for row in rows_by_season[season]]
-    evaluation = [row for season in EVALUATION_SEASONS for row in rows_by_season[season]]
+    training = [row for season in config.training_seasons for row in rows_by_season[season]]
+    evaluation = [row for season in config.evaluation_seasons for row in rows_by_season[season]]
     excluded = _excluded_names(config)
     if excluded:
         training = _mask_rows(training, excluded)
@@ -182,6 +192,8 @@ def _parse_arguments(argv: Sequence[str] | None) -> _RunConfig:
     )
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     parser.add_argument("--skip-health", action="store_true")
+    parser.add_argument("--training-seasons", default="2022,2023,2024")
+    parser.add_argument("--evaluation-seasons", default="2025,2026")
     namespace = parser.parse_args(argv)
     families = frozenset(family for family in str(namespace.exclude_families).split(",") if family)
     unknown = families - frozenset(FEATURE_FAMILIES)
@@ -191,7 +203,16 @@ def _parse_arguments(argv: Sequence[str] | None) -> _RunConfig:
         excluded_families=families,
         output_dir=namespace.output_dir,
         skip_health=bool(namespace.skip_health),
+        training_seasons=_season_list(str(namespace.training_seasons)),
+        evaluation_seasons=_season_list(str(namespace.evaluation_seasons)),
     )
+
+
+def _season_list(raw: str) -> tuple[int, ...]:
+    seasons = tuple(sorted({int(part) for part in raw.split(",") if part}))
+    if not seasons or any(season not in SEASON_FILES for season in seasons):
+        raise RuntimeError(f"seasons must be a subset of {sorted(SEASON_FILES)}: {raw!r}")
+    return seasons
 
 
 def build_schedule(snapshots: list[InjurySnapshot]) -> list[ScheduleEntry]:
@@ -309,8 +330,8 @@ def _evaluate(
     report: dict[str, object] = {
         "training_games": len(training),
         "evaluation_games": len(evaluation),
-        "training_seasons": list(TRAINING_SEASONS),
-        "evaluation_seasons": list(EVALUATION_SEASONS),
+        "training_seasons": list(config.training_seasons),
+        "evaluation_seasons": list(config.evaluation_seasons),
         "opened_evaluation_seasons": list(OPENED_EVALUATION_SEASONS),
         "excluded_feature_families": sorted(config.excluded_families),
         "health_training_games": len(health_training),
@@ -376,7 +397,7 @@ def _evaluate(
                 )
                 for row in rows
             ]
-            gate = evaluate_multi_season(forecasts, cohort, EVALUATION_SEASONS)
+            gate = evaluate_multi_season(forecasts, cohort, config.evaluation_seasons)
             variants[f"{name}_vs_{baseline_name}"] = _gate_payload(gate)
     report["variants"] = variants
     return report
