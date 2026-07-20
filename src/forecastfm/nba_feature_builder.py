@@ -11,6 +11,14 @@ no-history rule; their names are counted and disclosed in the manifest. Games wi
 pre-cutoff report at all get no health features and are excluded from the availability
 ablation only.
 
+Two availability pricing policies are disclosed. The default is the frozen binary rule:
+Out and Doubtful count as fully unavailable (weight 1.0) and every other status as fully
+available (weight 0.0). The variant passes a ``StatusPlayRates`` (from
+``forecastfm.nba_status_rates``) through ``build_game_features``; each listed player then
+contributes with effective unavailability weight ``1 - play_rate[status]`` applied to
+both health aggregates (minutes and value). The variant is off unless the rates are
+explicitly supplied.
+
 A disclosed prototype variant also computes each side's projected rotation value from the
 same selected snapshot: the minutes-weighted player value of the rotation pool (players
 with at least three appearances in the team's last ten games), with players listed Out or
@@ -25,6 +33,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from forecastfm.nba_injury_report import (
     UNAVAILABLE_STATUSES,
@@ -34,6 +43,9 @@ from forecastfm.nba_injury_report import (
 from forecastfm.nba_pbp import normalize_player_name
 from forecastfm.nba_season_games import SeasonGame
 from forecastfm.nba_team_history import GameContext, NbaTeamHistory, TeamSideFeatures
+
+if TYPE_CHECKING:
+    from forecastfm.nba_status_rates import StatusPlayRates
 
 NBA_FEATURE_BUILDER_SCHEMA_VERSION = 1
 
@@ -162,16 +174,19 @@ def build_game_features(
     elo_ratings: Mapping[tuple[int, str], float],
     injury_snapshots: list[InjurySnapshot],
     player_ratings: Mapping[str, float] | None = None,
+    status_rates: StatusPlayRates | None = None,
 ) -> tuple[list[GameFeatures], list[str]]:
     """Compute per-side features for one season in strict tipoff order.
 
     State resets at the start of each call, so one call covers exactly one season. Returns the
-    per-game features plus notes for games without any pre-cutoff report snapshot.
+    per-game features plus notes for games without any pre-cutoff report snapshot. When
+    ``status_rates`` is supplied, the disclosed empirical play-rate variant prices every
+    listed status by ``1 - play_rate`` instead of the frozen binary rule.
     """
     histories: dict[str, NbaTeamHistory] = {}
     features: list[GameFeatures] = []
     notes: list[str] = []
-    health_context = _HealthContext(injury_snapshots, notes, player_ratings)
+    health_context = _HealthContext(injury_snapshots, notes, player_ratings, status_rates)
     for game in games:
         away_history = histories.setdefault(
             game.away_abbreviation, NbaTeamHistory(game.away_abbreviation)
@@ -210,10 +225,12 @@ class _HealthContext:
         snapshots: list[InjurySnapshot],
         notes: list[str],
         player_ratings: Mapping[str, float] | None,
+        status_rates: StatusPlayRates | None = None,
     ) -> None:
         self.snapshots = snapshots
         self.notes = notes
         self.player_ratings = player_ratings
+        self.status_rates = status_rates
 
 
 def _pregame_report(
@@ -317,7 +334,8 @@ def _side_health(
     total_minutes = 0.0
     total_value = 0.0
     for row in side_rows:
-        if row.status not in UNAVAILABLE_STATUSES:
+        weight = _unavailability_weight(row.status, context.status_rates)
+        if weight <= 0.0:
             continue
         key = _name_key(row.player_name)
         if key not in prior_minutes and key not in values:
@@ -326,9 +344,24 @@ def _side_health(
                 "with no play-by-play history; contributing zero"
             )
         minutes = prior_minutes.get(key, 0.0)
-        total_minutes += minutes
-        total_value += minutes * values.get(key, 0.0)
+        total_minutes += weight * minutes
+        total_value += weight * minutes * values.get(key, 0.0)
     return (total_minutes, total_value)
+
+
+def _unavailability_weight(status: str, status_rates: StatusPlayRates | None) -> float:
+    """Return the effective unavailability weight for one reported status.
+
+    The default frozen binary rule prices Out and Doubtful as fully unavailable and every
+    other status as fully available; the disclosed empirical variant prices each status by
+    one minus its play rate.
+    """
+    if status_rates is None:
+        return 1.0 if status in UNAVAILABLE_STATUSES else 0.0
+    rate = status_rates.rates.get(status)
+    if rate is None:
+        raise NbaFeatureBuilderError(f"status play rates are missing status {status!r}")
+    return 1.0 - rate
 
 
 def _name_key(name: str) -> str:
