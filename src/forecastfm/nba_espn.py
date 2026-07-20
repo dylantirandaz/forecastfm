@@ -242,9 +242,12 @@ def _convert_play(play: dict[str, object], context: _ConversionContext) -> list[
 def _clock_text(raw: str) -> str:
     """Normalize an ESPN clock to whole-second ``M:SS`` form; raw seconds get a zero minute."""
     text = raw.strip()
-    if ":" in text:
-        minutes, seconds = text.split(":", 1)
-        return f"{int(minutes)}:{int(float(seconds)):02d}"
+    parts = text.split(":")
+    if len(parts) == 3:
+        total_minutes = int(parts[0]) * 60 + int(parts[1])
+        return f"{total_minutes}:{int(float(parts[2])):02d}"
+    if len(parts) == 2:
+        return f"{int(parts[0])}:{int(float(parts[1])):02d}"
     return f"0:{int(float(text)):02d}"
 
 
