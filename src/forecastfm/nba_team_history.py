@@ -20,6 +20,7 @@ from forecastfm.nba_pbp import PbpGame, normalize_player_name
 
 NBA_TEAM_HISTORY_SCHEMA_VERSION = 1
 ROLLING_WINDOW_GAMES = 10
+MIN_PROJECTED_ROTATION_APPEARANCES = 3
 OPENER_SCHEDULE_STRENGTH = 1500.0
 OPENER_CONTINUITY = 1.0
 
@@ -161,6 +162,42 @@ class NbaTeamHistory:
             player_id: statistics.median(values[-ROLLING_WINDOW_GAMES:])
             for player_id, values in appearances.items()
         }
+
+    def projected_rotation_value(
+        self,
+        player_values: Mapping[str, float],
+        unavailable_names: frozenset[str],
+    ) -> float:
+        """Minutes-weighted player value of the projected available rotation.
+
+        The pool is players with at least three appearances in the team's last ten games;
+        expected minutes are the median of those in-window appearances. The denominator is
+        the whole pool's expected minutes before unavailable players (normalized name keys)
+        are excluded, so absences lower the value. No history or an empty pool yields zero.
+        """
+        window = self._games[-ROLLING_WINDOW_GAMES:]
+        appearances: dict[int, list[float]] = {}
+        names: dict[int, str] = {}
+        for game in window:
+            for player_id, minutes in game.minutes.items():
+                appearances.setdefault(player_id, []).append(minutes)
+                name = game.player_names.get(player_id)
+                if name is not None:
+                    names[player_id] = name
+        total_minutes = 0.0
+        weighted = 0.0
+        for player_id, values in appearances.items():
+            if len(values) < MIN_PROJECTED_ROTATION_APPEARANCES:
+                continue
+            expected = statistics.median(values)
+            total_minutes += expected
+            name = names.get(player_id)
+            if name is None or _name_key(name) in unavailable_names:
+                continue
+            weighted += expected * player_values.get(_name_key(name), 0.0)
+        if total_minutes <= 0.0:
+            return 0.0
+        return weighted / total_minutes
 
     def rolling_values(self) -> dict[int, float]:
         """Return per-player rolling per-100 plus-minus over each player's ten prior games."""

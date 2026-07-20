@@ -4,13 +4,17 @@ import json
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 from forecastfm.nba_feature_builder import (
     TEAM_NAME_TO_ABBREVIATION,
+    GameFeatures,
     build_game_features,
     load_injury_index,
     normalize_player_name,
 )
 from forecastfm.nba_season_games import SeasonGame, join_season_games
+from forecastfm.nba_team_history import TeamSideFeatures
 from tests.test_nba_season_games import pbp_game_fixture, schedule_entry_fixture
 
 
@@ -39,11 +43,12 @@ def _row(
     status: str,
     team: str = "Boston Celtics",
     report_time: str = "2021-10-19T17:30:00-04:00",
+    game_date: str = "2021-10-19",
 ) -> dict[str, object]:
     return {
         "schema_version": 1,
         "report_time": report_time,
-        "game_date": "2021-10-19",
+        "game_date": game_date,
         "game_clock_et": "19:30",
         "matchup": "BOS@NYK",
         "away_team": "BOS",
@@ -126,3 +131,62 @@ def test_health_aggregates_from_selected_snapshot(tmp_path: Path) -> None:
     home_minutes, home_value = second.health[1]
     assert home_minutes == 24.0
     assert home_value != 0.0
+
+
+def _side_features() -> TeamSideFeatures:
+    return TeamSideFeatures(
+        rest_days=0.0,
+        back_to_back=0.0,
+        games_last_7=0.0,
+        road_games_last_7=0.0,
+        travel_miles=0.0,
+        travel_time_zones=0.0,
+        roster_continuity=0.0,
+        expected_lineup_continuity=0.0,
+        rolling_team_net_rating=0.0,
+        rolling_player_value=0.0,
+        schedule_strength=0.0,
+    )
+
+
+def test_game_features_projected_rotation_defaults_to_none() -> None:
+    entry = GameFeatures(game_id=1, away=_side_features(), home=_side_features(), health=None)
+    assert entry.projected_rotation is None
+
+
+def test_projected_rotation_from_selected_snapshot(tmp_path: Path) -> None:
+    target_day = date(2021, 10, 25)
+    _write_rows(
+        tmp_path,
+        target_day,
+        "a.rows.jsonl",
+        [
+            _row(
+                "Player 11",
+                "Out",
+                team="New York Knicks",
+                report_time="2021-10-25T17:30:00-04:00",
+                game_date="2021-10-25",
+            )
+        ],
+    )
+    snapshots = load_injury_index(tmp_path)
+    days = [date(2021, 10, 19), date(2021, 10, 21), date(2021, 10, 23), target_day]
+    games = [_season_game(22100001 + index, day) for index, day in enumerate(days)]
+    elo = {
+        (game.game_id, team): rating
+        for game in games
+        for team, rating in (("BOS", 1500.0), ("NYK", 1520.0))
+    }
+    features, notes = build_game_features(games, elo, snapshots, player_ratings={"12 player": 2.0})
+    assert len(notes) == 3
+    first, _, _, target = features
+    assert first.projected_rotation is None
+    assert first.health is None
+    assert target.health is not None
+    assert target.projected_rotation is not None
+    away_value, home_value = target.projected_rotation
+    # away pool carries no rated players; home prices "12 player" over the full
+    # ten-man pool while the absent "11 player" still occupies the denominator
+    assert away_value == 0.0
+    assert home_value == pytest.approx(0.2)

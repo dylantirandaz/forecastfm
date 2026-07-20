@@ -10,6 +10,12 @@ Reported players with no matching play-by-play history contribute zero, per the 
 no-history rule; their names are counted and disclosed in the manifest. Games with no
 pre-cutoff report at all get no health features and are excluded from the availability
 ablation only.
+
+A disclosed prototype variant also computes each side's projected rotation value from the
+same selected snapshot: the minutes-weighted player value of the rotation pool (players
+with at least three appearances in the team's last ten games), with players listed Out or
+Doubtful excluded from the numerator but not the denominator. It is None exactly when no
+pre-cutoff snapshot exists.
 """
 
 from __future__ import annotations
@@ -72,12 +78,18 @@ class NbaFeatureBuilderError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class GameFeatures:
-    """Both sides' standard features and optional health aggregates for one game."""
+    """Both sides' standard features and optional health aggregates for one game.
+
+    ``projected_rotation`` is a disclosed prototype variant (away, home) computed from the
+    same selected pre-T-60 snapshot as ``health``; it defaults to None so existing
+    constructors keep working.
+    """
 
     game_id: int
     away: TeamSideFeatures
     home: TeamSideFeatures
     health: tuple[tuple[float, float], tuple[float, float]] | None
+    projected_rotation: tuple[float, float] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,13 +181,18 @@ def build_game_features(
         )
         away_context = GameContext(game.game_date, game.tipoff, False, game.arena)
         home_context = GameContext(game.game_date, game.tipoff, True, game.arena)
-        health = _health_for_game(game, health_context, away_history, home_history)
+        pregame = _pregame_report(game, health_context, away_history, home_history)
+        if pregame is None:
+            health, projected_rotation = None, None
+        else:
+            health, projected_rotation = pregame
         features.append(
             GameFeatures(
                 game_id=game.game_id,
                 away=away_history.features_for(away_context, player_ratings),
                 home=home_history.features_for(home_context, player_ratings),
                 health=health,
+                projected_rotation=projected_rotation,
             )
         )
         away_elo = elo_ratings[(game.game_id, game.away_abbreviation)]
@@ -199,12 +216,13 @@ class _HealthContext:
         self.player_ratings = player_ratings
 
 
-def _health_for_game(
+def _pregame_report(
     game: SeasonGame,
     context: _HealthContext,
     away_history: NbaTeamHistory,
     home_history: NbaTeamHistory,
-) -> tuple[tuple[float, float], tuple[float, float]] | None:
+) -> tuple[tuple[tuple[float, float], tuple[float, float]], tuple[float, float]] | None:
+    """Compute both snapshot-derived variants from the same selected pre-T-60 snapshot."""
     cutoff = game.tipoff - timedelta(minutes=60)
     selected = next(
         (
@@ -226,7 +244,58 @@ def _health_for_game(
         return None
     away = _side_health(selected.rows, game.away_abbreviation, away_history, game, context)
     home = _side_health(selected.rows, game.home_abbreviation, home_history, game, context)
-    return (away, home)
+    projected = (
+        _side_projected_rotation(
+            selected.rows, game.away_abbreviation, away_history, game, context
+        ),
+        _side_projected_rotation(
+            selected.rows, game.home_abbreviation, home_history, game, context
+        ),
+    )
+    return (away, home), projected
+
+
+def _side_rows(
+    rows: tuple[InjuryReportRow, ...],
+    team_abbreviation: str,
+    game: SeasonGame,
+) -> list[InjuryReportRow]:
+    return [
+        row
+        for row in rows
+        if TEAM_NAME_TO_ABBREVIATION.get(row.team, "") == team_abbreviation
+        and matchup_teams(row.matchup) == (game.away_abbreviation, game.home_abbreviation)
+    ]
+
+
+def _side_values(
+    history: NbaTeamHistory,
+    game: SeasonGame,
+    context: _HealthContext,
+) -> Mapping[str, float]:
+    if context.player_ratings is not None:
+        return context.player_ratings
+    names = game.pbp.player_names
+    return {
+        _name_key(names[player_id]): value
+        for player_id, value in history.rolling_values().items()
+        if player_id in names
+    }
+
+
+def _side_projected_rotation(
+    rows: tuple[InjuryReportRow, ...],
+    team_abbreviation: str,
+    history: NbaTeamHistory,
+    game: SeasonGame,
+    context: _HealthContext,
+) -> float:
+    unavailable = frozenset(
+        _name_key(row.player_name)
+        for row in _side_rows(rows, team_abbreviation, game)
+        if row.status in UNAVAILABLE_STATUSES
+    )
+    return history.projected_rotation_value(_side_values(history, game, context), unavailable)
 
 
 def _side_health(
@@ -236,12 +305,7 @@ def _side_health(
     game: SeasonGame,
     context: _HealthContext,
 ) -> tuple[float, float]:
-    side_rows = [
-        row
-        for row in rows
-        if TEAM_NAME_TO_ABBREVIATION.get(row.team, "") == team_abbreviation
-        and matchup_teams(row.matchup) == (game.away_abbreviation, game.home_abbreviation)
-    ]
+    side_rows = _side_rows(rows, team_abbreviation, game)
     names = game.pbp.player_names
     expected = history.expected_minutes()
     prior_minutes = {
@@ -249,14 +313,7 @@ def _side_health(
         for player_id, minutes in expected.items()
         if player_id in names
     }
-    if context.player_ratings is not None:
-        values = context.player_ratings
-    else:
-        values = {
-            _name_key(names[player_id]): value
-            for player_id, value in history.rolling_values().items()
-            if player_id in names
-        }
+    values = _side_values(history, game, context)
     total_minutes = 0.0
     total_value = 0.0
     for row in side_rows:

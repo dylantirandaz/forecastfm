@@ -60,7 +60,7 @@ def main() -> int:
     replay = elo_replay(joined_by_season, notes)
     rows_by_season: dict[int, list[PrototypeGameRow]] = {}
     for season, joined in joined_by_season.items():
-        rows, season_notes = season_rows(season, joined, replay, injury_snapshots)
+        rows, _game_features, season_notes = season_rows(season, joined, replay, injury_snapshots)
         rows_by_season[season] = rows
         notes.extend(season_notes)
     training = [row for season in TRAINING_SEASONS for row in rows_by_season[season]]

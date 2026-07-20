@@ -1,5 +1,6 @@
 """Tests for the season-game join and the per-team rolling feature state."""
 
+from dataclasses import replace
 from datetime import UTC, date, datetime
 
 import pytest
@@ -153,3 +154,38 @@ def test_expected_minutes_uses_median_of_appearances() -> None:
     expected = history.expected_minutes()
     assert len(expected) == 10
     assert all(minutes == 24.0 for minutes in expected.values())
+
+
+def test_projected_rotation_requires_three_appearances() -> None:
+    history = NbaTeamHistory("NYK")
+    values = {"11 player": 2.0}
+    assert history.projected_rotation_value(values, frozenset()) == 0.0
+    _record(history, date(2021, 10, 19))
+    _record(history, date(2021, 10, 21))
+    assert history.projected_rotation_value(values, frozenset()) == 0.0
+    _record(history, date(2021, 10, 23))
+    # ten-player pool at 24 minutes each; only "11 player" carries value
+    assert history.projected_rotation_value(values, frozenset()) == pytest.approx(0.2)
+
+
+def test_projected_rotation_excludes_unavailable_from_numerator_only() -> None:
+    history = NbaTeamHistory("NYK")
+    for day in (date(2021, 10, 19), date(2021, 10, 21), date(2021, 10, 23)):
+        _record(history, day)
+    values = {"11 player": 2.0, "12 player": 1.0}
+    unavailable = frozenset({"11 player"})
+    # the absent player's 24 minutes still count in the 240-minute denominator
+    assert history.projected_rotation_value(values, unavailable) == pytest.approx(0.1)
+    assert history.projected_rotation_value(values, frozenset()) == pytest.approx(0.3)
+
+
+def test_projected_rotation_zero_minutes_pool_returns_zero() -> None:
+    history = NbaTeamHistory("NYK")
+    game = pbp_game_fixture(22100001)
+    rested = replace(
+        game,
+        player_lines=tuple(replace(line, seconds_played=0) for line in game.player_lines),
+    )
+    for day in (date(2021, 10, 19), date(2021, 10, 21), date(2021, 10, 23)):
+        history.record_game(rested, _context(day), 1500.0)
+    assert history.projected_rotation_value({"11 player": 2.0}, frozenset()) == 0.0

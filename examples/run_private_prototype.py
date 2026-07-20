@@ -7,14 +7,17 @@ baseline is the disclosed carryover margin-of-victory Elo replay; the recalibrat
 on training seasons only. The gate is the predeclared conjunction: positive mean
 baseline-relative log score and a positive one-sided 95% seven-day block-bootstrap lower bound
 in every declared season, against both baselines. A disclosed ablation adds the two local-only
-availability aggregates. Everything runs from local retained data; nothing is uploaded.
+availability aggregates. A second disclosed prototype variant, ``projected``, appends the
+projected-rotation value difference (home minus away, zero when no pre-T-60 snapshot exists)
+to the frozen standard features; it is disabled when ``--exclude-families`` masks the
+standard schema. Everything runs from local retained data; nothing is uploaded.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
@@ -30,6 +33,7 @@ from forecastfm.nba_evaluation_gate import (
     fit_training_only_logit_recalibrator,
 )
 from forecastfm.nba_feature_builder import (
+    GameFeatures,
     InjurySnapshot,
     build_game_features,
     load_injury_index,
@@ -134,9 +138,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         notes.extend(season_notes)
     replay = elo_replay(joined_by_season, notes)
     rows_by_season: dict[int, list[PrototypeGameRow]] = {}
+    game_features: dict[int, GameFeatures] = {}
     for season, joined in joined_by_season.items():
-        rows, season_notes = season_rows(season, joined, replay, injury_snapshots)
+        rows, season_features, season_notes = season_rows(season, joined, replay, injury_snapshots)
         rows_by_season[season] = rows
+        game_features.update(season_features)
         notes.extend(season_notes)
     training = [row for season in TRAINING_SEASONS for row in rows_by_season[season]]
     evaluation = [row for season in EVALUATION_SEASONS for row in rows_by_season[season]]
@@ -144,7 +150,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if excluded:
         training = _mask_rows(training, excluded)
         evaluation = _mask_rows(evaluation, excluded)
-    report = _evaluate(training, evaluation, notes, config)
+    report = _evaluate(training, evaluation, game_features, notes, config)
     config.output_dir.mkdir(parents=True, exist_ok=True)
     (config.output_dir / "manifest.json").write_text(
         json.dumps(report, indent=2) + "\n", encoding="utf-8"
@@ -264,8 +270,12 @@ def season_rows(
     joined: list[SeasonGame],
     replay: MovEloReplay,
     injury_snapshots: list[InjurySnapshot],
-) -> tuple[list[PrototypeGameRow], list[str]]:
-    """Build prototype rows for one season from RAPM priors and replayed Elo."""
+) -> tuple[list[PrototypeGameRow], dict[int, GameFeatures], list[str]]:
+    """Build prototype rows for one season from RAPM priors and replayed Elo.
+
+    Also returns the per-game ``GameFeatures`` keyed by game id so disclosed prototype
+    variants outside the frozen schema (for example projected rotation) can be derived.
+    """
     failures: list[str] = []
     rapm = fit_season_ratings_by_name(RAPM_PRIOR_FILES, season, failures=failures)
     features, notes = build_game_features(
@@ -275,12 +285,13 @@ def season_rows(
         player_ratings=rapm,
     )
     rows = build_prototype_rows(joined, features, replay.home_probabilities)
-    return rows, failures + notes
+    return rows, {entry.game_id: entry for entry in features}, failures + notes
 
 
 def _evaluate(
     training: list[PrototypeGameRow],
     evaluation: list[PrototypeGameRow],
+    game_features: Mapping[int, GameFeatures],
     notes: list[str],
     config: _RunConfig,
 ) -> dict[str, object]:
@@ -328,6 +339,18 @@ def _evaluate(
         health_model = _fit_variant(health_training, health_names, include_health=True)
         models_report["health"] = _model_payload(health_model, health_names)
         model_variants.append(("health", health_model, health_evaluation, health_names))
+    if excluded:
+        report["projected_variant"] = (
+            "skipped: --exclude-families masks the frozen standard features, "
+            "so the projected variant is disabled"
+        )
+    else:
+        projected_names = (*standard_names, "projected_rotation_value")
+        projected_training = [_projected_row(row, game_features) for row in training]
+        projected_evaluation = [_projected_row(row, game_features) for row in evaluation]
+        projected_model = _fit_variant(projected_training, projected_names, include_health=False)
+        models_report["projected"] = _model_payload(projected_model, projected_names)
+        model_variants.append(("projected", projected_model, projected_evaluation, projected_names))
     report["models"] = models_report
     for name, model, rows, _names in model_variants:
         include_health = name == "health"
@@ -357,6 +380,16 @@ def _evaluate(
             variants[f"{name}_vs_{baseline_name}"] = _gate_payload(gate)
     report["variants"] = variants
     return report
+
+
+def _projected_row(
+    row: PrototypeGameRow,
+    game_features: Mapping[int, GameFeatures],
+) -> PrototypeGameRow:
+    """Append the projected-rotation difference (home minus away, 0.0 when unknown)."""
+    projected = game_features[row.game_id].projected_rotation
+    delta = 0.0 if projected is None else projected[1] - projected[0]
+    return replace(row, features_standard=(*row.features_standard, delta))
 
 
 def _fit_variant(
