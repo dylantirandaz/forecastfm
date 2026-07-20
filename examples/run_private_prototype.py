@@ -17,8 +17,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
+import urllib.error
+import urllib.request
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from forecastfm.elo_residual import (
@@ -28,6 +32,7 @@ from forecastfm.elo_residual import (
     fit_elo_residual,
 )
 from forecastfm.nba_arenas import EXCLUDED_CUP_FINALS, is_neutral_site
+from forecastfm.nba_espn import parse_scoreboard
 from forecastfm.nba_evaluation_gate import (
     NbaRecalibrationRow,
     fit_training_only_logit_recalibrator,
@@ -39,6 +44,7 @@ from forecastfm.nba_feature_builder import (
     load_injury_index,
     schedule_from_injury_index,
 )
+from forecastfm.nba_injury_report import ET_ZONE
 from forecastfm.nba_mov_elo import EloGameResult, MovEloReplay, replay_mov_elo
 from forecastfm.nba_pbp import PbpGame, read_pbp_games
 from forecastfm.nba_prototype_dataset import (
@@ -60,6 +66,18 @@ from forecastfm.outcome_v2_metrics import (
 
 DATA_RAW = Path("data/raw")
 INJURY_ARCHIVE = DATA_RAW / "nba_injury_reports"
+ESPN_RAW = DATA_RAW / "espn/raw"
+ESPN_SCOREBOARD_URL = (
+    "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={day}"
+)
+ESPN_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+# Seasons whose injury-report schedules are unreliable: the nine-column era has coverage gaps
+# and the 2020-21 COVID season never removed postponed games from same-day reports, so the
+# final-snapshot cleaning rule fails. ESPN scoreboards are the schedule ground truth there.
+ESPN_SCHEDULE_WINDOWS = {
+    2020: ("2019-10-22", "2020-08-15"),
+    2021: ("2020-12-22", "2021-05-16"),
+}
 OUTPUT_DIR = Path("data/processed/private_prototype")
 
 SEASON_FILES = {
@@ -229,15 +247,66 @@ def build_schedule(snapshots: list[InjurySnapshot]) -> list[ScheduleEntry]:
     ]
 
 
+def espn_schedule(season: int) -> list[ScheduleEntry]:
+    """Fetch and cache ESPN scoreboards as the schedule ground truth for one season."""
+    start, end = ESPN_SCHEDULE_WINDOWS[season]
+    first = datetime.strptime(start, "%Y-%m-%d").replace(tzinfo=UTC).date()
+    last = datetime.strptime(end, "%Y-%m-%d").replace(tzinfo=UTC).date()
+    entries: list[ScheduleEntry] = []
+    for offset in range((last - first).days + 1):
+        day = first + timedelta(days=offset)
+        for reference in parse_scoreboard(_fetch_scoreboard(day)):
+            tipoff_utc = datetime.fromisoformat(reference.date_utc.replace("Z", "+00:00"))
+            tipoff_et = tipoff_utc.astimezone(ET_ZONE)
+            entries.append(
+                ScheduleEntry(
+                    game_date=tipoff_et.date(),
+                    away_abbreviation=reference.away_abbreviation,
+                    home_abbreviation=reference.home_abbreviation,
+                    tip_clock=(tipoff_et.hour, tipoff_et.minute),
+                )
+            )
+    entries.sort(key=lambda entry: (entry.game_date, entry.tip_clock))
+    return entries
+
+
+def _fetch_scoreboard(day: object) -> bytes:
+    ESPN_RAW.mkdir(parents=True, exist_ok=True)
+    target = ESPN_RAW / f"scoreboard-{day}.json"
+    if target.exists():
+        return target.read_bytes()
+    compact = str(day).replace("-", "")
+    request = urllib.request.Request(
+        ESPN_SCOREBOARD_URL.format(day=compact),
+        headers={"User-Agent": ESPN_USER_AGENT},
+    )
+    for attempt in range(3):
+        time.sleep(0.25)
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                payload = response.read()
+        except (TimeoutError, urllib.error.URLError):
+            if attempt == 2:
+                raise
+            time.sleep(2.0 * (attempt + 1))
+        else:
+            target.write_bytes(payload)
+            return payload
+    raise RuntimeError("unreachable")
+
+
 def load_season(
     season: int,
     path: Path,
     schedule: list[ScheduleEntry],
 ) -> tuple[list[SeasonGame], list[str]]:
-    """Read one season of play-by-play and join it to the schedule."""
+    """Parse one season and join it with its ground-truth schedule."""
     failures: list[str] = []
     games = list(read_pbp_games(path, failures))
-    season_schedule = [entry for entry in schedule if _entry_season(entry) == season]
+    if season in ESPN_SCHEDULE_WINDOWS:
+        season_schedule = espn_schedule(season)
+    else:
+        season_schedule = [entry for entry in schedule if _entry_season(entry) == season]
     joined, join_notes = join_season_games(games, season_schedule)
     return joined, failures + join_notes
 

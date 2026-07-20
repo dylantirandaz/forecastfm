@@ -127,6 +127,10 @@ def parse_scoreboard(payload: bytes) -> list[EspnGameRef]:
     references: list[EspnGameRef] = []
     for event in require_list(required_field(document, "events"), "events"):
         event_object = require_object(event, "event")
+        status = require_object(event_object.get("status", {}), "status")
+        status_type = require_object(status.get("type", {}), "status.type")
+        if status_type.get("completed") is not True:
+            continue
         away_abbr, home_abbr = _competitors(event_object)
         if away_abbr not in NBA_TEAM_ABBREVIATIONS or home_abbr not in NBA_TEAM_ABBREVIATIONS:
             continue
