@@ -125,17 +125,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Build every season, fit on training seasons, and evaluate the declared seasons."""
     config = _parse_arguments(argv)
     injury_snapshots = load_injury_index(INJURY_ARCHIVE)
-    schedule = _schedule(injury_snapshots)
+    schedule = build_schedule(injury_snapshots)
     joined_by_season: dict[int, list[SeasonGame]] = {}
     notes: list[str] = []
     for season, path in SEASON_FILES.items():
-        joined, season_notes = _load_season(season, path, schedule)
+        joined, season_notes = load_season(season, path, schedule)
         joined_by_season[season] = joined
         notes.extend(season_notes)
-    replay = _elo_replay(joined_by_season, notes)
+    replay = elo_replay(joined_by_season, notes)
     rows_by_season: dict[int, list[PrototypeGameRow]] = {}
     for season, joined in joined_by_season.items():
-        rows, season_notes = _season_rows(season, joined, replay, injury_snapshots)
+        rows, season_notes = season_rows(season, joined, replay, injury_snapshots)
         rows_by_season[season] = rows
         notes.extend(season_notes)
     training = [row for season in TRAINING_SEASONS for row in rows_by_season[season]]
@@ -188,7 +188,8 @@ def _parse_arguments(argv: Sequence[str] | None) -> _RunConfig:
     )
 
 
-def _schedule(snapshots: list[InjurySnapshot]) -> list[ScheduleEntry]:
+def build_schedule(snapshots: list[InjurySnapshot]) -> list[ScheduleEntry]:
+    """Build the injury-archive schedule minus excluded cup finals."""
     return [
         ScheduleEntry(
             game_date=day,
@@ -201,11 +202,12 @@ def _schedule(snapshots: list[InjurySnapshot]) -> list[ScheduleEntry]:
     ]
 
 
-def _load_season(
+def load_season(
     season: int,
     path: Path,
     schedule: list[ScheduleEntry],
 ) -> tuple[list[SeasonGame], list[str]]:
+    """Read one season of play-by-play and join it to the schedule."""
     failures: list[str] = []
     games = list(read_pbp_games(path, failures))
     season_schedule = [entry for entry in schedule if _entry_season(entry) == season]
@@ -217,10 +219,11 @@ def _entry_season(entry: ScheduleEntry) -> int:
     return entry.game_date.year + 1 if entry.game_date.month >= 7 else entry.game_date.year
 
 
-def _elo_replay(
+def elo_replay(
     joined_by_season: dict[int, list[SeasonGame]],
     notes: list[str],
 ) -> MovEloReplay:
+    """Replay the carryover margin-of-victory Elo over warmup and model seasons."""
     sequences: list[list[EloGameResult]] = []
     for path in (WARMUP_FILES[season] for season in sorted(WARMUP_FILES)):
         failures: list[str] = []
@@ -256,12 +259,13 @@ def _elo_result_from_season_game(game: SeasonGame) -> EloGameResult:
     )
 
 
-def _season_rows(
+def season_rows(
     season: int,
     joined: list[SeasonGame],
     replay: MovEloReplay,
     injury_snapshots: list[InjurySnapshot],
 ) -> tuple[list[PrototypeGameRow], list[str]]:
+    """Build prototype rows for one season from RAPM priors and replayed Elo."""
     failures: list[str] = []
     rapm = fit_season_ratings_by_name(RAPM_PRIOR_FILES, season, failures=failures)
     features, notes = build_game_features(
