@@ -62,8 +62,8 @@ def compute_status_play_rates(
     exceed Probable: empirically it does not (see the module docstring).
     """
     ordered = sorted(snapshots, key=lambda snapshot: snapshot.report_time)
-    listings = dict.fromkeys(STATUS_ORDER, 0)
-    appearances = dict.fromkeys(STATUS_ORDER, 0)
+    listings: dict[str, int] = dict.fromkeys(STATUS_ORDER, 0)
+    appearances: dict[str, int] = dict.fromkeys(STATUS_ORDER, 0)
     for game in games:
         selected = _selected_snapshot(ordered, game)
         if selected is None:
