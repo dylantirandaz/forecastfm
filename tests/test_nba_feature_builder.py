@@ -29,7 +29,7 @@ def test_team_name_table_covers_thirty_teams() -> None:
     assert len(set(TEAM_NAME_TO_ABBREVIATION.values())) == 30
 
 
-def _write_rows(root: Path, day: date, filename: str, rows: list[dict[str, object]]) -> None:
+def write_rows(root: Path, day: date, filename: str, rows: list[dict[str, object]]) -> None:
     day_dir = root / day.isoformat()
     day_dir.mkdir(parents=True, exist_ok=True)
     (day_dir / filename).write_text(
@@ -38,7 +38,7 @@ def _write_rows(root: Path, day: date, filename: str, rows: list[dict[str, objec
     )
 
 
-def _row(
+def report_row(
     player: str,
     status: str,
     team: str = "Boston Celtics",
@@ -60,12 +60,12 @@ def _row(
 
 
 def test_load_injury_index_groups_by_date(tmp_path: Path) -> None:
-    _write_rows(tmp_path, date(2021, 10, 19), "a.rows.jsonl", [_row("Smart, Marcus", "Out")])
-    _write_rows(
+    write_rows(tmp_path, date(2021, 10, 19), "a.rows.jsonl", [report_row("Smart, Marcus", "Out")])
+    write_rows(
         tmp_path,
         date(2021, 10, 19),
         "b.rows.jsonl",
-        [_row("Smart, Marcus", "Out", report_time="2021-10-19T19:30:00-04:00")],
+        [report_row("Smart, Marcus", "Out", report_time="2021-10-19T19:30:00-04:00")],
     )
     snapshots = load_injury_index(tmp_path)
     assert len(snapshots) == 2
@@ -95,11 +95,11 @@ def test_build_game_features_computes_both_sides() -> None:
 
 def test_health_aggregates_from_selected_snapshot(tmp_path: Path) -> None:
     day = date(2021, 10, 19)
-    _write_rows(
+    write_rows(
         tmp_path,
         day,
         "a.rows.jsonl",
-        [_row("Player 11", "Out", team="New York Knicks"), _row("Player 1", "Out")],
+        [report_row("Player 11", "Out", team="New York Knicks"), report_row("Player 1", "Out")],
     )
     snapshots = load_injury_index(tmp_path)
     game = _season_game(22100001, day)
@@ -156,12 +156,12 @@ def test_game_features_projected_rotation_defaults_to_none() -> None:
 
 def test_projected_rotation_from_selected_snapshot(tmp_path: Path) -> None:
     target_day = date(2021, 10, 25)
-    _write_rows(
+    write_rows(
         tmp_path,
         target_day,
         "a.rows.jsonl",
         [
-            _row(
+            report_row(
                 "Player 11",
                 "Out",
                 team="New York Knicks",

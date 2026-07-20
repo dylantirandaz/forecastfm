@@ -18,7 +18,7 @@ from forecastfm.nba_status_rates import (
     StatusPlayRates,
     compute_status_play_rates,
 )
-from tests.test_nba_feature_builder import _row, _write_rows
+from tests.test_nba_feature_builder import report_row, write_rows
 from tests.test_nba_season_games import pbp_game_fixture, schedule_entry_fixture
 
 DAY_ONE = date(2025, 11, 1)
@@ -115,7 +115,7 @@ def _games_for(spec: tuple[tuple[str, str, str, tuple[bool, bool]], ...]) -> lis
     return joined
 
 
-def _report_row(
+def _reportreport_row(
     report_name: str,
     status: str,
     team: str,
@@ -140,15 +140,16 @@ def _snapshots_for(
     stale_flipped = datetime(2025, 11, 1, 19, 0, tzinfo=ET_ZONE)
     second = datetime(2025, 11, 3, 17, 30, tzinfo=ET_ZONE)
     day_one_rows = [
-        _report_row(name, status, team, early, DAY_ONE) for name, status, team, _ in spec
+        _reportreport_row(name, status, team, early, DAY_ONE) for name, status, team, _ in spec
     ]
     # Past the T-60 cutoff for game one, so it must never be selected: it flips every
     # status to Available, and any selection bug would change the computed rates.
     flipped_rows = [
-        _report_row(name, "Available", team, stale_flipped, DAY_ONE) for name, _, team, _ in spec
+        _reportreport_row(name, "Available", team, stale_flipped, DAY_ONE)
+        for name, _, team, _ in spec
     ]
     day_two_rows = [
-        _report_row(name, status, team, second, DAY_TWO) for name, status, team, _ in spec
+        _reportreport_row(name, status, team, second, DAY_TWO) for name, status, team, _ in spec
     ]
     return [
         InjurySnapshot(report_time=early, rows=tuple(day_one_rows)),
@@ -207,7 +208,7 @@ def test_compute_status_play_rates_accepts_available_below_probable() -> None:
 def test_compute_status_play_rates_rejects_missing_status_class() -> None:
     report_time = datetime(2025, 11, 1, 17, 30, tzinfo=ET_ZONE)
     rows = tuple(
-        _report_row(name, status, team, report_time, DAY_ONE)
+        _reportreport_row(name, status, team, report_time, DAY_ONE)
         for name, status, team, _ in _FIXTURE_ROWS
         if status != "Available"
     )
@@ -220,12 +221,12 @@ def test_compute_status_play_rates_rejects_non_monotone_rates() -> None:
     report_time = datetime(2025, 11, 1, 17, 30, tzinfo=ET_ZONE)
     rows = (
         *(
-            _report_row(name, status, team, report_time, DAY_ONE)
+            _reportreport_row(name, status, team, report_time, DAY_ONE)
             for name, status, team, _ in _FIXTURE_ROWS
             if status != "Available"
         ),
         # The only Available player never appears, so Available ties Out at 0.0.
-        _report_row("Absent, Abby", "Available", "Boston Celtics", report_time, DAY_ONE),
+        _reportreport_row("Absent, Abby", "Available", "Boston Celtics", report_time, DAY_ONE),
     )
     snapshots = [InjurySnapshot(report_time=report_time, rows=rows)]
     with pytest.raises(NbaStatusRatesError, match="not strictly increasing"):
@@ -253,11 +254,11 @@ def _elo(joined: list[SeasonGame]) -> dict[tuple[int, str], float]:
 
 def test_side_health_defaults_to_frozen_binary_rule(tmp_path: Path) -> None:
     day_two = date(2021, 10, 20)
-    _write_rows(
+    write_rows(
         tmp_path,
         day_two,
         "a.rows.jsonl",
-        [_row("Player 1", "Questionable", game_date=day_two.isoformat())],
+        [report_row("Player 1", "Questionable", game_date=day_two.isoformat())],
     )
     joined = _weighted_games()
     features, _ = build_game_features(
@@ -273,11 +274,11 @@ def test_side_health_defaults_to_frozen_binary_rule(tmp_path: Path) -> None:
 
 def test_side_health_status_rates_variant_weights_both_aggregates(tmp_path: Path) -> None:
     day_two = date(2021, 10, 20)
-    _write_rows(
+    write_rows(
         tmp_path,
         day_two,
         "a.rows.jsonl",
-        [_row("Player 1", "Questionable", game_date=day_two.isoformat())],
+        [report_row("Player 1", "Questionable", game_date=day_two.isoformat())],
     )
     joined = _weighted_games()
     rates = StatusPlayRates(rates=dict(_EXPECTED_RATES), counts=dict(_EXPECTED_COUNTS))
@@ -294,12 +295,12 @@ def test_side_health_status_rates_variant_weights_both_aggregates(tmp_path: Path
 
 def test_side_health_status_rates_none_matches_binary_out(tmp_path: Path) -> None:
     day_two = date(2021, 10, 20)
-    _write_rows(
+    write_rows(
         tmp_path,
         day_two,
         "a.rows.jsonl",
         [
-            _row(
+            report_row(
                 "Player 1",
                 "Out",
                 report_time="2021-10-20T17:30:00-04:00",

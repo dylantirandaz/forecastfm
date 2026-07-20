@@ -45,7 +45,7 @@ def _context_signal_games() -> tuple[BanditGame, ...]:
 
 
 def _mean_mixture_log_loss(selector: BanditSelector, games: tuple[BanditGame, ...]) -> float:
-    losses = []
+    losses: list[float] = []
     for game in games:
         probability = selector.forecast(game.context, game.arm_probabilities)
         realized = probability if game.outcome == 1 else 1.0 - probability
