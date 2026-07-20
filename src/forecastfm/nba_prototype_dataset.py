@@ -96,9 +96,11 @@ def feature_names(*, include_health: bool) -> tuple[str, ...]:
 def fit_rms_scales(rows: list[PrototypeGameRow], *, include_health: bool) -> tuple[float, ...]:
     """Compute uncentered RMS scales over original training rows only."""
     vectors = [to_residual_row(row, include_health=include_health).features for row in rows]
-    names = feature_names(include_health=include_health)
+    width = len(vectors[0])
+    if any(len(vector) != width for vector in vectors):
+        raise ValueError("feature vectors differ in width")
     scales: list[float] = []
-    for index in range(len(names)):
+    for index in range(width):
         mean_square = sum(vector[index] ** 2 for vector in vectors) / len(vectors)
         scales.append(mean_square**0.5 if mean_square > 0.0 else 1.0)
     return tuple(scales)
