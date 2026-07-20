@@ -12,8 +12,10 @@ availability aggregates. Everything runs from local retained data; nothing is up
 
 from __future__ import annotations
 
+import argparse
 import json
-from dataclasses import asdict
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 from forecastfm.elo_residual import (
@@ -38,11 +40,11 @@ from forecastfm.nba_pbp import PbpGame, read_pbp_games
 from forecastfm.nba_prototype_dataset import (
     PrototypeGameRow,
     build_prototype_rows,
-    feature_names,
     fit_rms_scales,
     to_residual_row,
 )
 from forecastfm.nba_rapm import fit_season_ratings_by_name
+from forecastfm.nba_rich import NBA_LOCAL_HEALTH_FEATURE_NAMES, NBA_RICH_FEATURE_NAMES
 from forecastfm.nba_season_games import ScheduleEntry, SeasonGame, join_season_games
 from forecastfm.outcome_v2_config import outcome_v2_evaluation_policy
 from forecastfm.outcome_v2_metrics import (
@@ -80,6 +82,29 @@ EVALUATION_SEASONS = (2025, 2026)
 OPENED_EVALUATION_SEASONS = (2025,)
 FIT_CONFIG = EloResidualFitConfig(steps=2_000, learning_rate=0.05, l2_penalty=0.01)
 
+FEATURE_FAMILIES: dict[str, tuple[str, ...]] = {
+    "rest": ("rest_days", "back_to_back", "games_last_7", "road_games_last_7"),
+    "travel": ("travel_miles", "travel_time_zones"),
+    "continuity": ("roster_continuity", "expected_lineup_continuity"),
+    "team_form": ("rolling_team_net_rating",),
+    "player_value": ("rolling_player_value",),
+    "schedule_strength": ("schedule_strength",),
+}
+
+
+@dataclass(frozen=True, slots=True)
+class _RunConfig:
+    excluded_families: frozenset[str]
+    output_dir: Path
+    skip_health: bool
+
+
+def _excluded_names(config: _RunConfig) -> frozenset[str]:
+    names: set[str] = set()
+    for family in config.excluded_families:
+        names.update(FEATURE_FAMILIES[family])
+    return frozenset(names)
+
 
 class _ScaledModel:
     """One fitted Elo-offset model with its frozen training-only RMS scales."""
@@ -96,8 +121,9 @@ class _ScaledModel:
         return self.model.predict_probability(residual.elo_probability, scaled)
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """Build every season, fit on training seasons, and evaluate the declared seasons."""
+    config = _parse_arguments(argv)
     injury_snapshots = load_injury_index(INJURY_ARCHIVE)
     schedule = _schedule(injury_snapshots)
     joined_by_season: dict[int, list[SeasonGame]] = {}
@@ -114,11 +140,52 @@ def main() -> int:
         notes.extend(season_notes)
     training = [row for season in TRAINING_SEASONS for row in rows_by_season[season]]
     evaluation = [row for season in EVALUATION_SEASONS for row in rows_by_season[season]]
-    report = _evaluate(training, evaluation, notes)
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    (OUTPUT_DIR / "manifest.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    excluded = _excluded_names(config)
+    if excluded:
+        training = _mask_rows(training, excluded)
+        evaluation = _mask_rows(evaluation, excluded)
+    report = _evaluate(training, evaluation, notes, config)
+    config.output_dir.mkdir(parents=True, exist_ok=True)
+    (config.output_dir / "manifest.json").write_text(
+        json.dumps(report, indent=2) + "\n", encoding="utf-8"
+    )
     print(json.dumps(report, indent=2))
     return 0
+
+
+def _mask_rows(
+    rows: list[PrototypeGameRow],
+    excluded: frozenset[str],
+) -> list[PrototypeGameRow]:
+    indices = [index for index, name in enumerate(NBA_RICH_FEATURE_NAMES) if name not in excluded]
+    return [
+        replace(
+            row,
+            features_standard=tuple(row.features_standard[index] for index in indices),
+        )
+        for row in rows
+    ]
+
+
+def _parse_arguments(argv: Sequence[str] | None) -> _RunConfig:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--exclude-families",
+        default="",
+        help="comma-separated feature families to drop: " + ",".join(sorted(FEATURE_FAMILIES)),
+    )
+    parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    parser.add_argument("--skip-health", action="store_true")
+    namespace = parser.parse_args(argv)
+    families = frozenset(family for family in str(namespace.exclude_families).split(",") if family)
+    unknown = families - frozenset(FEATURE_FAMILIES)
+    if unknown:
+        raise RuntimeError(f"unknown feature families: {sorted(unknown)}")
+    return _RunConfig(
+        excluded_families=families,
+        output_dir=namespace.output_dir,
+        skip_health=bool(namespace.skip_health),
+    )
 
 
 def _schedule(snapshots: list[InjurySnapshot]) -> list[ScheduleEntry]:
@@ -211,10 +278,13 @@ def _evaluate(
     training: list[PrototypeGameRow],
     evaluation: list[PrototypeGameRow],
     notes: list[str],
+    config: _RunConfig,
 ) -> dict[str, object]:
-    standard_model = _fit_variant(training, include_health=False)
+    excluded = _excluded_names(config)
+    standard_names = tuple(name for name in NBA_RICH_FEATURE_NAMES if name not in excluded)
+    health_names = standard_names + NBA_LOCAL_HEALTH_FEATURE_NAMES
+    standard_model = _fit_variant(training, standard_names, include_health=False)
     health_training = [row for row in training if row.features_health is not None]
-    health_model = _fit_variant(health_training, include_health=True)
     health_evaluation = [row for row in evaluation if row.features_health is not None]
     policy = outcome_v2_evaluation_policy()
     recalibrator = fit_training_only_logit_recalibrator(
@@ -227,6 +297,7 @@ def _evaluate(
         "training_seasons": list(TRAINING_SEASONS),
         "evaluation_seasons": list(EVALUATION_SEASONS),
         "opened_evaluation_seasons": list(OPENED_EVALUATION_SEASONS),
+        "excluded_feature_families": sorted(config.excluded_families),
         "health_training_games": len(health_training),
         "health_evaluation_games": len(health_evaluation),
         "notes_count": len(notes),
@@ -242,16 +313,19 @@ def _evaluate(
             "intercept": recalibrator.intercept,
             "slope": recalibrator.slope,
         },
-        "models": {
-            "standard": _model_payload(standard_model, include_health=False),
-            "health": _model_payload(health_model, include_health=True),
-        },
+        "models": {},
     }
     variants: dict[str, object] = {}
-    for name, model, rows in (
-        ("standard", standard_model, evaluation),
-        ("health", health_model, health_evaluation),
-    ):
+    model_variants: list[tuple[str, _ScaledModel, list[PrototypeGameRow], tuple[str, ...]]] = [
+        ("standard", standard_model, evaluation, standard_names)
+    ]
+    models_report: dict[str, object] = {"standard": _model_payload(standard_model, standard_names)}
+    if not config.skip_health:
+        health_model = _fit_variant(health_training, health_names, include_health=True)
+        models_report["health"] = _model_payload(health_model, health_names)
+        model_variants.append(("health", health_model, health_evaluation, health_names))
+    report["models"] = models_report
+    for name, model, rows, _names in model_variants:
         include_health = name == "health"
         for baseline_name in ("raw_elo", "recalibrated_elo"):
             forecasts = [
@@ -281,7 +355,12 @@ def _evaluate(
     return report
 
 
-def _fit_variant(rows: list[PrototypeGameRow], *, include_health: bool) -> _ScaledModel:
+def _fit_variant(
+    rows: list[PrototypeGameRow],
+    names: tuple[str, ...],
+    *,
+    include_health: bool,
+) -> _ScaledModel:
     scales = fit_rms_scales(rows, include_health=include_health)
     residual_rows = [
         EloResidualRow(
@@ -294,17 +373,13 @@ def _fit_variant(rows: list[PrototypeGameRow], *, include_health: bool) -> _Scal
         )
         for residual in (to_residual_row(row, include_health=include_health) for row in rows)
     ]
-    model = fit_elo_residual(
-        residual_rows,
-        feature_names(include_health=include_health),
-        FIT_CONFIG,
-    )
+    model = fit_elo_residual(residual_rows, names, FIT_CONFIG)
     return _ScaledModel(model, scales)
 
 
-def _model_payload(model: _ScaledModel, *, include_health: bool) -> dict[str, object]:
+def _model_payload(model: _ScaledModel, names: tuple[str, ...]) -> dict[str, object]:
     return {
-        "feature_names": list(feature_names(include_health=include_health)),
+        "feature_names": list(names),
         "weights": list(model.model.weights),
         "rms_scales": list(model.scales),
         "fit_config": {
