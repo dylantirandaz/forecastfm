@@ -218,11 +218,12 @@ def test_compute_status_play_rates_rejects_missing_status_class() -> None:
 
 def test_compute_status_play_rates_rejects_non_monotone_rates() -> None:
     report_time = datetime(2025, 11, 1, 17, 30, tzinfo=ET_ZONE)
-    rows = tuple(
-        _report_row(name, status, team, report_time, DAY_ONE)
-        for name, status, team, _ in _FIXTURE_ROWS
-        if status != "Available"
-    ) + (
+    rows = (
+        *(
+            _report_row(name, status, team, report_time, DAY_ONE)
+            for name, status, team, _ in _FIXTURE_ROWS
+            if status != "Available"
+        ),
         # The only Available player never appears, so Available ties Out at 0.0.
         _report_row("Absent, Abby", "Available", "Boston Celtics", report_time, DAY_ONE),
     )
