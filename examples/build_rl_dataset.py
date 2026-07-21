@@ -33,7 +33,7 @@ def build_rows() -> tuple[list[PrototypeGameRow], list[str]]:
     notes: list[str] = []
     injury_snapshots = prototype.load_injury_index(prototype.INJURY_ARCHIVE)
     schedule = prototype.build_schedule(injury_snapshots)
-    joined_by_season = {}
+    joined_by_season: dict[int, list[prototype.SeasonGame]] = {}
     for season in RL_SEASONS:
         joined, season_notes = prototype.load_season(
             season, prototype.SEASON_FILES[season], schedule
