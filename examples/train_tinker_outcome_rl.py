@@ -229,10 +229,12 @@ async def _run(
     step_metrics: list[dict[str, object]] = []
     for step in range(1, steps + 1):
         sampler_future = await training_client.save_weights_for_sampler_async(
-            name=f"rl-step-{step - 1}"
+            name=f"rl-sampler-{step}"
         )
         sampler_weights = await sampler_future.result_async()
         sampler = service_client.create_sampling_client(model_path=sampler_weights.path)
+        if step in {25, 50, 75, 100}:
+            checkpoints.append(sampler_weights.path)
         batch = _batch_for_step(questions, step, config)
         rollouts, calls = await _rollout_batch(batch, rendered, sampler, config)
         call_count += calls
@@ -254,10 +256,6 @@ async def _run(
         metrics = _step_metrics(step, rollouts, call_count)
         _journal(journal, metrics)
         step_metrics.append(metrics)
-        if step in {25, 50, 75, 100}:
-            saved_future = await training_client.save_weights_for_sampler_async(f"rl-step-{step}")
-            saved = await saved_future.result_async()
-            checkpoints.append(saved.path)
     final_future = await training_client.save_weights_for_sampler_async("rl-final")
     final_saved = await final_future.result_async()
     checkpoints.append(final_saved.path)
