@@ -7,6 +7,7 @@ import pytest
 
 from forecastfm.nba_feature_builder import (
     InjurySnapshot,
+    PlayerValueInputs,
     build_game_features,
     load_injury_index,
 )
@@ -262,7 +263,7 @@ def test_side_health_defaults_to_frozen_binary_rule(tmp_path: Path) -> None:
     )
     joined = _weighted_games()
     features, _ = build_game_features(
-        joined, _elo(joined), load_injury_index(tmp_path), {"1 player": 2.0}
+        joined, _elo(joined), load_injury_index(tmp_path), PlayerValueInputs(flat={"1 player": 2.0})
     )
     second = features[1]
     assert second.health is not None
@@ -283,7 +284,11 @@ def test_side_health_status_rates_variant_weights_both_aggregates(tmp_path: Path
     joined = _weighted_games()
     rates = StatusPlayRates(rates=dict(_EXPECTED_RATES), counts=dict(_EXPECTED_COUNTS))
     features, _ = build_game_features(
-        joined, _elo(joined), load_injury_index(tmp_path), {"1 player": 2.0}, rates
+        joined,
+        _elo(joined),
+        load_injury_index(tmp_path),
+        PlayerValueInputs(flat={"1 player": 2.0}),
+        rates,
     )
     second = features[1]
     assert second.health is not None
@@ -310,7 +315,11 @@ def test_side_health_status_rates_none_matches_binary_out(tmp_path: Path) -> Non
     )
     joined = _weighted_games()
     features, _ = build_game_features(
-        joined, _elo(joined), load_injury_index(tmp_path), {"1 player": 2.0}, None
+        joined,
+        _elo(joined),
+        load_injury_index(tmp_path),
+        PlayerValueInputs(flat={"1 player": 2.0}),
+        None,
     )
     second = features[1]
     assert second.health is not None

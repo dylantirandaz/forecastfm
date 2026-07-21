@@ -40,6 +40,7 @@ from forecastfm.nba_evaluation_gate import (
 from forecastfm.nba_feature_builder import (
     GameFeatures,
     InjurySnapshot,
+    PlayerValueInputs,
     build_game_features,
     load_injury_index,
     schedule_from_injury_index,
@@ -392,7 +393,7 @@ def season_rows(
         joined,
         replay.ratings,
         injury_snapshots,
-        player_ratings=rapm,
+        player_values=PlayerValueInputs(flat=rapm),
     )
     rows = build_prototype_rows(joined, features, replay.home_probabilities)
     return rows, {entry.game_id: entry for entry in features}, failures + notes

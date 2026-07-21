@@ -35,12 +35,13 @@ from examples.run_private_prototype import (
 from forecastfm.elo_residual import EloResidualModel, EloResidualRow, fit_elo_residual
 from forecastfm.nba_feature_builder import (
     GameFeatures,
+    HealthContext,
     InjurySnapshot,
-    _HealthContext,
-    _side_health,
-    _side_projected_rotation,
+    PlayerValueInputs,
     build_game_features,
     load_injury_index,
+    side_health,
+    side_projected_rotation,
 )
 from forecastfm.nba_injury_report import matchup_teams
 from forecastfm.nba_prototype_dataset import PrototypeGameRow, build_prototype_rows
@@ -167,16 +168,12 @@ def pregame_report_at_horizon(
             f"T-{horizon_minutes} cutoff"
         )
         return None
-    context = _HealthContext(list(inputs.snapshots), inputs.notes, inputs.player_ratings)
-    away = _side_health(selected.rows, game.away_abbreviation, away_history, game, context)
-    home = _side_health(selected.rows, game.home_abbreviation, home_history, game, context)
+    context = HealthContext(list(inputs.snapshots), inputs.notes, inputs.player_ratings)
+    away = side_health(selected.rows, game.away_abbreviation, away_history, game, context)
+    home = side_health(selected.rows, game.home_abbreviation, home_history, game, context)
     projected = (
-        _side_projected_rotation(
-            selected.rows, game.away_abbreviation, away_history, game, context
-        ),
-        _side_projected_rotation(
-            selected.rows, game.home_abbreviation, home_history, game, context
-        ),
+        side_projected_rotation(selected.rows, game.away_abbreviation, away_history, game, context),
+        side_projected_rotation(selected.rows, game.home_abbreviation, home_history, game, context),
     )
     return (away, home), projected
 
@@ -314,7 +311,7 @@ def _load_scope() -> _ScopeData:
     rapm = fit_season_ratings_by_name(RAPM_PRIOR_FILES, SEASON, failures=notes)
     games = joined_by_season[SEASON]
     features, builder_notes = build_game_features(
-        games, replay.ratings, snapshots, player_ratings=rapm
+        games, replay.ratings, snapshots, player_values=PlayerValueInputs(flat=rapm)
     )
     notes.extend(builder_notes)
     rows = build_prototype_rows(games, features, replay.home_probabilities)

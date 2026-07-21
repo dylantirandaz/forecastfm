@@ -34,9 +34,11 @@ from examples.run_private_prototype import (
 )
 
 from forecastfm.elo_residual import EloResidualModel, EloResidualRow, fit_elo_residual
+from forecastfm.json_utils import require_float
 from forecastfm.nba_feature_builder import (
     GameFeatures,
     InjurySnapshot,
+    PlayerValueInputs,
     build_game_features,
     load_injury_index,
 )
@@ -127,16 +129,11 @@ def _season_rows(
     kalman: KalmanRatings,
 ) -> tuple[list[PrototypeGameRow], dict[int, GameFeatures], list[str]]:
     """Build one season's rows with the Kalman name-keyed ratings as the player-value input."""
-    name_ratings = {
-        (game.game_id, side): kalman.by_name[(game.game_id, side)]
-        for game in joined
-        for side in (game.away_abbreviation, game.home_abbreviation)
-    }
     features, notes = build_game_features(
         joined,
         replay.ratings,
         injury_snapshots,
-        player_ratings=name_ratings,
+        player_values=PlayerValueInputs(by_game=kalman.by_name),
     )
     rows = build_prototype_rows(joined, features, replay.home_probabilities)
     return rows, {entry.game_id: entry for entry in features}, notes
@@ -216,14 +213,20 @@ def _report(
     notes: list[str],
 ) -> dict[str, object]:
     """Assemble the manifest with the predeclared pooled verdict."""
-    total_games = sum(int(season["games"]) for season in per_season.values())
+    total_games = sum(
+        int(require_float(season["games"], "games")) for season in per_season.values()
+    )
     pooled_kalman = (
-        sum(float(season["log_loss"]) * int(season["games"]) for season in per_season.values())
+        sum(
+            require_float(season["log_loss"], "log_loss")
+            * int(require_float(season["games"], "games"))
+            for season in per_season.values()
+        )
         / total_games
     )
     pooled_rapm = (
         sum(
-            RAPM_PROJECTED_LOG_LOSS[season] * int(entry["games"])
+            RAPM_PROJECTED_LOG_LOSS[season] * int(require_float(entry["games"], "games"))
             for season, entry in per_season.items()
         )
         / total_games

@@ -9,6 +9,7 @@ import pytest
 from forecastfm.nba_feature_builder import (
     TEAM_NAME_TO_ABBREVIATION,
     GameFeatures,
+    PlayerValueInputs,
     build_game_features,
     load_injury_index,
     normalize_player_name,
@@ -178,7 +179,9 @@ def test_projected_rotation_from_selected_snapshot(tmp_path: Path) -> None:
         for game in games
         for team, rating in (("BOS", 1500.0), ("NYK", 1520.0))
     }
-    features, notes = build_game_features(games, elo, snapshots, player_ratings={"12 player": 2.0})
+    features, notes = build_game_features(
+        games, elo, snapshots, player_values=PlayerValueInputs(flat={"12 player": 2.0})
+    )
     assert len(notes) == 3
     first, _, _, target = features
     assert first.projected_rotation is None
