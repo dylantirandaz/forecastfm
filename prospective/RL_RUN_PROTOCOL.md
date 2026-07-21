@@ -64,6 +64,13 @@ explicitly accept. FiveThirtyEight (CC BY) and Wikidata (CC0) components are cle
   weak base + more training. Our 4B base measured 1.27 log loss raw — do not repeat it.)
 - Reward: Brier score on the realized winner (bounded, lower-variance PG; their stability
   finding over log score). Report log loss at evaluation regardless.
+- Reward computation (v1.1 amendment for the gpt-oss harmony format): the model's completion
+  is `analysis` then `final` channel; the answer is the last TEAM/OTHER token. Per rollout,
+  p(TEAM) = softmax(logprob of the sampled label token at its position, counterfactual
+  logprob of the other label at the same position from one compute_logprobs scoring call on
+  prompt + that rollout's completion prefix). This yields a true per-rollout probability (a
+  single deterministic per-question probability would zero every GRPO advantage).
+  Completions with no TEAM/OTHER token score reward 0 with no scoring call.
 - Algorithm: policy gradient with GRPO-style advantage normalization, NO std-dev division,
   importance-sampling correction for sampler/trainer divergence, group size 8, batch 64.
 - Scale: ~6,140 questions; 1 epoch; ~100 optimizer steps ≈ 51k rollouts.
