@@ -177,6 +177,40 @@ class PlayerValueInputs:
     by_game: Mapping[tuple[int, str], Mapping[str, float]] | None = None
 
 
+def injury_rows_for_game(
+    game: SeasonGame,
+    snapshots: list[InjurySnapshot],
+) -> tuple[InjuryReportRow, ...]:
+    """Return the selected pre-T-60 snapshot's rows for one game's matchup, or none.
+
+    Uses the same selection rule as the health-feature path: the latest snapshot at or before
+    tipoff minus 60 minutes that contains the matchup. Returns an empty tuple when no such
+    snapshot exists.
+    """
+    cutoff = game.tipoff - timedelta(minutes=60)
+    selected = next(
+        (
+            snapshot
+            for snapshot in reversed(snapshots)
+            if snapshot.report_time.astimezone(UTC) <= cutoff
+            and any(
+                row.game_date == game.game_date
+                and matchup_teams(row.matchup) == (game.away_abbreviation, game.home_abbreviation)
+                for row in snapshot.rows
+            )
+        ),
+        None,
+    )
+    if selected is None:
+        return ()
+    return tuple(
+        row
+        for row in selected.rows
+        if row.game_date == game.game_date
+        and matchup_teams(row.matchup) == (game.away_abbreviation, game.home_abbreviation)
+    )
+
+
 def build_game_features(
     games: Iterable[SeasonGame],
     elo_ratings: Mapping[tuple[int, str], float],

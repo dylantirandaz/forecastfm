@@ -37,19 +37,14 @@ retried with a tweaked prompt.
   logp(OTHER), so a zero residual recovers Elo exactly.
 - Splits are chronological by season; exact prompt overlap across splits is rejected.
 
-### 2a. OPEN DECISION — health-derived values in the prompt
+### 2a. DECIDED — option B chosen 2026-07-22
 
-The two availability aggregates and `projected_rotation_value` are health-derived and are
-currently LOCAL-ONLY by the project's health boundary ("standard Tinker exports reject
-health-derived lineage"), even though they contain no player identifiers. Options:
-
-- **A (default, strict)**: prompt contains Elo + the 11 features only. The projected-rotation
-  and availability evidence stays out of the Tinker run.
-- **B (owner amendment)**: the user, as boundary owner, explicitly authorizes aggregated,
-  non-identifying health-derived floats for this run, in writing, below this paragraph. Named
-  injuries, raw injury text, and player identifiers remain barred regardless.
-
-Choice required before launch; default is A.
+~~Options A (default, strict) and B (owner amendment).~~ The owner chose **B**: aggregated
+AND per-player injury-report content (names, statuses, reason categories from the official
+public injury reports) is authorized in prompts for private-research RL runs, on the owner's
+reading that publicly published league injury reports carry no additional privacy constraint
+for local private research. Named health records still never enter this handoff or any
+shared/published artifact, and prompts remain local training inputs only.
 
 ### 2b. Rights flag (must be acknowledged before launch)
 

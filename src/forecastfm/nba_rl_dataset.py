@@ -32,12 +32,15 @@ from pathlib import Path
 from forecastfm.integrity import canonical_json, canonical_sha256, file_sha256
 from forecastfm.json_utils import JsonFormatError, require_object, require_string, required_field
 from forecastfm.nba_data import SIDE_SWAP_SUFFIX
+from forecastfm.nba_feature_builder import TEAM_NAME_TO_ABBREVIATION, GameFeatures
+from forecastfm.nba_injury_report import InjuryReportRow, matchup_teams
 from forecastfm.nba_prototype_dataset import PrototypeGameRow
 from forecastfm.nba_rich import NBA_RICH_FEATURE_NAMES
 from forecastfm.outcome import OPPONENT_LABEL, TEAM_LABEL
 
 RL_PROMPT_TEMPLATE_VERSION = "rl-prompt-v1"
 RL_PROMPT_TEMPLATE_VERSION_V2 = "rl-prompt-v2"
+RL_PROMPT_TEMPLATE_VERSION_V21 = "rl-prompt-v2.1"
 RL_DATASET_SCHEMA_VERSION = 1
 RL_ELO_FIELD = "elo_home_probability"
 RL_ANSWER_FIELD = "winner_label"
@@ -59,6 +62,21 @@ RL_SYSTEM_PROMPT_V2 = (
     "differences (home minus away), estimate the probability that the listed team wins. "
     "Answer with exactly one decimal number between 0 and 1: your probability that the "
     "listed team wins."
+)
+
+RL_SYSTEM_PROMPT_V21 = (
+    "You are a calibrated NBA forecasting model. Given an Elo prior, pregame evidence "
+    "differences (home minus away), and the latest pregame injury-report statuses for each "
+    "team, estimate the probability that the listed team wins. Answer with exactly one "
+    "decimal number between 0 and 1: your probability that the listed team wins."
+)
+
+RL_INJURIES_FIELDS = ("listed_team_injuries", "opponent_injuries")
+
+RL_HEALTH_FEATURE_NAMES = (
+    "unavailable_rotation_minutes",
+    "unavailable_rotation_value",
+    "projected_rotation_value",
 )
 
 RL_USER_TEMPLATE = "\n".join(
@@ -129,6 +147,77 @@ def build_prompt(
     raise NbaRlDatasetError(f"unknown RL prompt template version: {version}")
 
 
+def format_injury_lines(rows: tuple[InjuryReportRow, ...]) -> str:
+    """Format one side's injury rows as compact status-grouped text for a prompt."""
+    if not rows:
+        return "-"
+    by_status: dict[str, list[str]] = {}
+    for row in rows:
+        by_status.setdefault(row.status, []).append(row.player_name)
+    return " | ".join(
+        f"{status}: {', '.join(sorted(names))}" for status, names in sorted(by_status.items())
+    )
+
+
+def build_prompt_v21(
+    row: PrototypeGameRow,
+    game_features: GameFeatures,
+    injury_rows: tuple[InjuryReportRow, ...],
+    *,
+    swapped: bool,
+) -> tuple[str, str]:
+    """Render the rl-prompt-v2.1 pair: evidence plus per-side injury statuses."""
+    system, base_user = build_prompt(row, swapped=swapped, version=RL_PROMPT_TEMPLATE_VERSION_V2)
+    lines = base_user.rsplit(f"{RL_ANSWER_FIELD_V2}:", 1)[0].rstrip("\n").split("\n")
+    lines.extend(_health_lines(row, game_features, swapped=swapped))
+    lines.extend(_injury_lines(injury_rows, swapped=swapped))
+    lines.append(f"{RL_ANSWER_FIELD_V2}:")
+    return system, "\n".join(lines)
+
+
+def _health_lines(
+    row: PrototypeGameRow, game_features: GameFeatures, *, swapped: bool
+) -> list[str]:
+    values = _health_values(game_features)
+    if swapped:
+        values = tuple(-value for value in values)
+    return [
+        f"{name}: {value:+.3f}" for name, value in zip(RL_HEALTH_FEATURE_NAMES, values, strict=True)
+    ]
+
+
+def _health_values(game_features: GameFeatures) -> tuple[float, float, float]:
+    health = game_features.health or ((0.0, 0.0), (0.0, 0.0))
+    projected = game_features.projected_rotation or (0.0, 0.0)
+    return (
+        health[1][0] - health[0][0],
+        health[1][1] - health[0][1],
+        projected[1] - projected[0],
+    )
+
+
+def _injury_lines(injury_rows: tuple[InjuryReportRow, ...], *, swapped: bool) -> list[str]:
+    if not injury_rows:
+        return ["listed_team_injuries: -", "opponent_injuries: -"]
+    away_abbr, home_abbr = matchup_teams(injury_rows[0].matchup)
+    away_rows = tuple(
+        row for row in injury_rows if TEAM_NAME_TO_ABBREVIATION.get(row.team, "") == away_abbr
+    )
+    home_rows = tuple(
+        row for row in injury_rows if TEAM_NAME_TO_ABBREVIATION.get(row.team, "") == home_abbr
+    )
+    listed, opponent = (home_rows, away_rows) if not swapped else (away_rows, home_rows)
+    return [
+        f"listed_team_injuries: {format_injury_lines(listed)}",
+        f"opponent_injuries: {format_injury_lines(opponent)}",
+    ]
+
+
+def row_team_abbreviation(row: InjuryReportRow, side: int) -> str:
+    """Return the away (0) or home (1) abbreviation from one row's matchup."""
+    return matchup_teams(row.matchup)[side]
+
+
 def answer_label(row: PrototypeGameRow, *, swapped: bool) -> str:
     """Return TEAM when the orientation's listed team won; otherwise OTHER."""
     listed_won = not row.home_won if swapped else row.home_won
@@ -150,6 +239,99 @@ def prompt_record(
         "orientation": SWAPPED_ORIENTATION if swapped else ORIGINAL_ORIENTATION,
         "season": row.season,
         "game_date": row.game_date.isoformat(),
+    }
+
+
+def prompt_record_v21(
+    row: PrototypeGameRow,
+    game_features: GameFeatures,
+    injury_rows: tuple[InjuryReportRow, ...],
+    *,
+    swapped: bool,
+) -> dict[str, object]:
+    """Return the canonical rl-prompt-v2.1 record for one orientation."""
+    system, user = build_prompt_v21(row, game_features, injury_rows, swapped=swapped)
+    return {
+        "question_id": rl_question_id(row, swapped=swapped),
+        "system": system,
+        "user": user,
+        "orientation": SWAPPED_ORIENTATION if swapped else ORIGINAL_ORIENTATION,
+        "season": row.season,
+        "game_date": row.game_date.isoformat(),
+    }
+
+
+def seal_rl_dataset_v21(
+    rows: list[PrototypeGameRow],
+    features_by_id: dict[int, GameFeatures],
+    snapshots_by_game: dict[int, tuple[InjuryReportRow, ...]],
+    output_dir: Path,
+) -> dict[str, object]:
+    """Write the rl-prompt-v2.1 dataset create-only; return the manifest payload."""
+    ordered = sorted(rows, key=lambda row: (row.game_date, row.game_id))
+    if len({row.game_id for row in ordered}) != len(ordered):
+        raise NbaRlDatasetError("RL rows contain a duplicate game_id")
+    prompt_lines: list[str] = []
+    answer_lines: list[str] = []
+    for row in ordered:
+        game_features = features_by_id.get(row.game_id)
+        if game_features is None:
+            raise NbaRlDatasetError(f"missing game features for {row.game_id}")
+        injury_rows = snapshots_by_game.get(row.game_id, ())
+        for swapped in (False, True):
+            prompt_lines.append(
+                canonical_json(prompt_record_v21(row, game_features, injury_rows, swapped=swapped))
+            )
+            answer_lines.append(canonical_json(answer_record(row, swapped=swapped)))
+    prompts_path = output_dir / PROMPTS_FILENAME
+    answers_path = output_dir / ANSWERS_FILENAME
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _write_create_only(prompts_path, "".join(f"{line}\n" for line in prompt_lines))
+    _write_create_only(answers_path, "".join(f"{line}\n" for line in answer_lines))
+    manifest = _manifest_v21(ordered, prompts_path, answers_path)
+    _write_create_only(output_dir / MANIFEST_FILENAME, f"{canonical_json(manifest)}\n")
+    return manifest
+
+
+def prompt_template_sha256_v21() -> str:
+    """Hash the frozen rl-prompt-v2.1 template."""
+    return canonical_sha256(
+        {
+            "template_version": RL_PROMPT_TEMPLATE_VERSION_V21,
+            "system": RL_SYSTEM_PROMPT_V21,
+            "answer_field": RL_ANSWER_FIELD_V2,
+            "injuries_fields": list(RL_INJURIES_FIELDS),
+            "health_feature_names": list(RL_HEALTH_FEATURE_NAMES),
+        }
+    )
+
+
+def _manifest_v21(
+    rows: list[PrototypeGameRow],
+    prompts_path: Path,
+    answers_path: Path,
+) -> dict[str, object]:
+    seasons: dict[str, dict[str, int]] = {}
+    for row in rows:
+        entry = seasons.setdefault(str(row.season), {"games": 0, "prompts": 0})
+        entry["games"] += 1
+        entry["prompts"] += 2
+    return {
+        "schema_version": RL_DATASET_SCHEMA_VERSION,
+        "prompt_template_version": RL_PROMPT_TEMPLATE_VERSION_V21,
+        "prompt_template_sha256": prompt_template_sha256_v21(),
+        "elo_field": RL_ELO_FIELD,
+        "answer_field": RL_ANSWER_FIELD_V2,
+        "health_feature_names": list(RL_HEALTH_FEATURE_NAMES),
+        "injuries_fields": list(RL_INJURIES_FIELDS),
+        "orientations_per_game": [ORIGINAL_ORIENTATION, SWAPPED_ORIENTATION],
+        "total_games": len(rows),
+        "total_prompts": 2 * len(rows),
+        "seasons": seasons,
+        "files": {
+            PROMPTS_FILENAME: {"sha256": file_sha256(prompts_path)},
+            ANSWERS_FILENAME: {"sha256": file_sha256(answers_path)},
+        },
     }
 
 
@@ -179,6 +361,8 @@ def prompt_template_sha256(version: str = RL_PROMPT_TEMPLATE_VERSION) -> str:
                 "user": RL_USER_TEMPLATE,
             }
         )
+    if version == RL_PROMPT_TEMPLATE_VERSION_V21:
+        return prompt_template_sha256_v21()
     raise NbaRlDatasetError(f"unknown RL prompt template version: {version}")
 
 

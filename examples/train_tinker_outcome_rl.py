@@ -36,15 +36,13 @@ from forecastfm.json_utils import (
 )
 from forecastfm.local_config import read_tinker_api_key
 
-DATASET_DIR = Path("data/processed/rl_dataset_v2")
+DATASET_DIR = Path("data/processed/rl_dataset_v21")
 PROTOCOL_PATH = Path("prospective/RL_RUN_PROTOCOL.md")
 ARTIFACTS_DIR = Path("artifacts/tinker")
-TEAM_TOKEN = 197467
-OTHER_TOKEN = 60669
-RENDERER_NAME = "gpt_oss_low_reasoning"
-BASE_MODEL = "openai/gpt-oss-120b"
-TEMPLATE_VERSION = "rl-prompt-v2"
-FINAL_CHANNEL_MARKER = "<|channel|>final<|message|>"
+RENDERER_NAME = "kimi_k25"
+BASE_MODEL = "moonshotai/Kimi-K2.5"
+TEMPLATE_VERSION = "rl-prompt-v2.1"
+THINK_CLOSE_MARKER = "</think>"
 PROBABILITY_PATTERN = re.compile(r"(0(?:\.\d+)?|1(?:\.0+)?)")
 
 
@@ -62,7 +60,7 @@ class RlRunConfig:
     batch_size: int = 64
     group_size: int = 8
     temperature: float = 1.0
-    max_tokens: int = 192
+    max_tokens: int = 2048
     seed: int = 20260720
     max_calls: int = 8_000
     concurrency: int = 32
@@ -350,8 +348,11 @@ async def _rollouts_from_response(
 
 
 def _parse_stated_probability(text: str) -> float | None:
-    """Extract the stated win probability from the completion's final channel."""
-    tail = text.rsplit(FINAL_CHANNEL_MARKER, 1)[-1]
+    """Extract the stated win probability from the post-thinking answer segment."""
+    if THINK_CLOSE_MARKER in text:
+        tail = text.rsplit(THINK_CLOSE_MARKER, 1)[-1]
+    else:
+        tail = text[-200:]
     match = PROBABILITY_PATTERN.search(tail)
     if match is None:
         return None
