@@ -71,6 +71,14 @@ explicitly accept. FiveThirtyEight (CC BY) and Wikidata (CC0) components are cle
   prompt + that rollout's completion prefix). This yields a true per-rollout probability (a
   single deterministic per-question probability would zero every GRPO advantage).
   Completions with no TEAM/OTHER token score reward 0 with no scoring call.
+- v1.1 result (preserved): the recipe collapsed to a sharp classifier (~75 percent accuracy,
+  p in {0,1}, log loss 3.45 in-sample) because Brier on softmax-over-two-tokens rewards p=1
+  when right and near-deterministic groups equalize advantages.
+- Reward computation (v2, probability-in-action-space): the completion contract changes to
+  probability-as-text — the model states one decimal number in [0, 1] in the final channel
+  (prompt template rl-prompt-v2, answer position `team_win_probability:`). Reward = 1 minus
+  Brier on the PARSED number; unparseable or out-of-range numbers score 0. Calibration now
+  lives in the action space and cannot collapse to argmax. No counterfactual scoring calls.
 - Algorithm: policy gradient with GRPO-style advantage normalization, NO std-dev division,
   importance-sampling correction for sampler/trainer divergence, group size 8, batch 64.
 - Scale: ~6,140 questions; 1 epoch; ~100 optimizer steps ≈ 51k rollouts.

@@ -11,6 +11,7 @@ artifacts are never replaced; rerun only after removing them deliberately.
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from collections.abc import Sequence
@@ -22,7 +23,12 @@ if __package__ in {None, ""}:  # direct `python examples/build_rl_dataset.py` in
 from examples import run_private_prototype as prototype
 
 from forecastfm.nba_prototype_dataset import PrototypeGameRow
-from forecastfm.nba_rl_dataset import seal_rl_dataset, verify_sealed_dataset
+from forecastfm.nba_rl_dataset import (
+    RL_PROMPT_TEMPLATE_VERSION,
+    RL_PROMPT_TEMPLATE_VERSION_V2,
+    seal_rl_dataset,
+    verify_sealed_dataset,
+)
 
 OUTPUT_DIR = Path("data/processed/rl_dataset")
 RL_SEASONS = (2022, 2023, 2024, 2025, 2026)
@@ -53,10 +59,17 @@ def build_rows() -> tuple[list[PrototypeGameRow], list[str]]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Seal the RL question set and confirm the sealed hashes reproduce."""
-    del argv
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--template-version",
+        default=RL_PROMPT_TEMPLATE_VERSION,
+        choices=[RL_PROMPT_TEMPLATE_VERSION, RL_PROMPT_TEMPLATE_VERSION_V2],
+    )
+    parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    args = parser.parse_args(argv)
     rows, notes = build_rows()
-    manifest = seal_rl_dataset(rows, OUTPUT_DIR)
-    verify_sealed_dataset(OUTPUT_DIR)
+    manifest = seal_rl_dataset(rows, args.output_dir, args.template_version)
+    verify_sealed_dataset(args.output_dir, args.template_version)
     print(json.dumps(manifest, indent=2))
     for note in notes:
         print(f"note: {note}", file=sys.stderr)

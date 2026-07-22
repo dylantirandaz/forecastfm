@@ -37,9 +37,11 @@ from forecastfm.nba_rich import NBA_RICH_FEATURE_NAMES
 from forecastfm.outcome import OPPONENT_LABEL, TEAM_LABEL
 
 RL_PROMPT_TEMPLATE_VERSION = "rl-prompt-v1"
+RL_PROMPT_TEMPLATE_VERSION_V2 = "rl-prompt-v2"
 RL_DATASET_SCHEMA_VERSION = 1
 RL_ELO_FIELD = "elo_home_probability"
 RL_ANSWER_FIELD = "winner_label"
+RL_ANSWER_FIELD_V2 = "team_win_probability"
 ORIGINAL_ORIENTATION = "original"
 SWAPPED_ORIENTATION = "side-swap"
 PROMPTS_FILENAME = "prompts.jsonl"
@@ -50,6 +52,13 @@ RL_SYSTEM_PROMPT = (
     "You are a calibrated NBA forecasting model. Given an Elo prior and pregame evidence "
     "differences (home minus away), estimate the probability that the listed team wins. "
     "Answer with exactly one label: TEAM if the listed team wins, OTHER if the opponent wins."
+)
+
+RL_SYSTEM_PROMPT_V2 = (
+    "You are a calibrated NBA forecasting model. Given an Elo prior and pregame evidence "
+    "differences (home minus away), estimate the probability that the listed team wins. "
+    "Answer with exactly one decimal number between 0 and 1: your probability that the "
+    "listed team wins."
 )
 
 RL_USER_TEMPLATE = "\n".join(
@@ -90,8 +99,13 @@ def swap_row(row: PrototypeGameRow) -> PrototypeGameRow:
     )
 
 
-def build_prompt(row: PrototypeGameRow, *, swapped: bool) -> tuple[str, str]:
-    """Render the frozen rl-prompt-v1 (system, user) pair for one orientation."""
+def build_prompt(
+    row: PrototypeGameRow,
+    *,
+    swapped: bool,
+    version: str = RL_PROMPT_TEMPLATE_VERSION,
+) -> tuple[str, str]:
+    """Render a frozen (system, user) pair for one orientation and template version."""
     if len(row.features_standard) != len(NBA_RICH_FEATURE_NAMES):
         raise NbaRlDatasetError("RL prompts require exactly the 11 standard features")
     probability = row.elo_home_probability
@@ -106,8 +120,13 @@ def build_prompt(row: PrototypeGameRow, *, swapped: bool) -> tuple[str, str]:
         f"{name}: {value:+.3f}"
         for name, value in zip(NBA_RICH_FEATURE_NAMES, features, strict=True)
     )
-    lines.append(f"{RL_ANSWER_FIELD}:")
-    return RL_SYSTEM_PROMPT, "\n".join(lines)
+    if version == RL_PROMPT_TEMPLATE_VERSION_V2:
+        lines.append(f"{RL_ANSWER_FIELD_V2}:")
+        return RL_SYSTEM_PROMPT_V2, "\n".join(lines)
+    if version == RL_PROMPT_TEMPLATE_VERSION:
+        lines.append(f"{RL_ANSWER_FIELD}:")
+        return RL_SYSTEM_PROMPT, "\n".join(lines)
+    raise NbaRlDatasetError(f"unknown RL prompt template version: {version}")
 
 
 def answer_label(row: PrototypeGameRow, *, swapped: bool) -> str:
@@ -116,9 +135,14 @@ def answer_label(row: PrototypeGameRow, *, swapped: bool) -> str:
     return TEAM_LABEL if listed_won else OPPONENT_LABEL
 
 
-def prompt_record(row: PrototypeGameRow, *, swapped: bool) -> dict[str, object]:
-    """Return the canonical prompts.jsonl record for one orientation."""
-    system, user = build_prompt(row, swapped=swapped)
+def prompt_record(
+    row: PrototypeGameRow,
+    *,
+    swapped: bool,
+    version: str = RL_PROMPT_TEMPLATE_VERSION,
+) -> dict[str, object]:
+    """Return the canonical prompts.jsonl record for one orientation and template version."""
+    system, user = build_prompt(row, swapped=swapped, version=version)
     return {
         "question_id": rl_question_id(row, swapped=swapped),
         "system": system,
@@ -137,20 +161,31 @@ def answer_record(row: PrototypeGameRow, *, swapped: bool) -> dict[str, object]:
     }
 
 
-def prompt_template_sha256() -> str:
-    """Hash the frozen rl-prompt-v1 template (system text plus user skeleton)."""
-    return canonical_sha256(
-        {
-            "template_version": RL_PROMPT_TEMPLATE_VERSION,
-            "system": RL_SYSTEM_PROMPT,
-            "user": RL_USER_TEMPLATE,
-        }
-    )
+def prompt_template_sha256(version: str = RL_PROMPT_TEMPLATE_VERSION) -> str:
+    """Hash one frozen template (system text plus user skeleton)."""
+    if version == RL_PROMPT_TEMPLATE_VERSION_V2:
+        return canonical_sha256(
+            {
+                "template_version": version,
+                "system": RL_SYSTEM_PROMPT_V2,
+                "user": RL_USER_TEMPLATE.replace(RL_ANSWER_FIELD, RL_ANSWER_FIELD_V2),
+            }
+        )
+    if version == RL_PROMPT_TEMPLATE_VERSION:
+        return canonical_sha256(
+            {
+                "template_version": version,
+                "system": RL_SYSTEM_PROMPT,
+                "user": RL_USER_TEMPLATE,
+            }
+        )
+    raise NbaRlDatasetError(f"unknown RL prompt template version: {version}")
 
 
 def seal_rl_dataset(
     rows: list[PrototypeGameRow],
     output_dir: Path,
+    version: str = RL_PROMPT_TEMPLATE_VERSION,
 ) -> dict[str, object]:
     """Write prompts, answers, and manifest create-only; return the manifest payload."""
     ordered = sorted(rows, key=lambda row: (row.game_date, row.game_id))
@@ -160,19 +195,24 @@ def seal_rl_dataset(
     answer_lines: list[str] = []
     for row in ordered:
         for swapped in (False, True):
-            prompt_lines.append(canonical_json(prompt_record(row, swapped=swapped)))
+            prompt_lines.append(
+                canonical_json(prompt_record(row, swapped=swapped, version=version))
+            )
             answer_lines.append(canonical_json(answer_record(row, swapped=swapped)))
     prompts_path = output_dir / PROMPTS_FILENAME
     answers_path = output_dir / ANSWERS_FILENAME
     output_dir.mkdir(parents=True, exist_ok=True)
     _write_create_only(prompts_path, "".join(f"{line}\n" for line in prompt_lines))
     _write_create_only(answers_path, "".join(f"{line}\n" for line in answer_lines))
-    manifest = _manifest(ordered, prompts_path, answers_path)
+    manifest = _manifest(ordered, prompts_path, answers_path, version)
     _write_create_only(output_dir / MANIFEST_FILENAME, f"{canonical_json(manifest)}\n")
     return manifest
 
 
-def verify_sealed_dataset(output_dir: Path) -> dict[str, object]:
+def verify_sealed_dataset(
+    output_dir: Path,
+    version: str = RL_PROMPT_TEMPLATE_VERSION,
+) -> dict[str, object]:
     """Reload a sealed dataset and confirm every recorded hash reproduces."""
     manifest_path = output_dir / MANIFEST_FILENAME
     try:
@@ -184,8 +224,8 @@ def verify_sealed_dataset(output_dir: Path) -> dict[str, object]:
         raise NbaRlDatasetError("cannot read the RL dataset manifest") from error
     except JsonFormatError as error:
         raise NbaRlDatasetError("RL dataset manifest is malformed") from error
-    if template_hash != prompt_template_sha256():
-        raise NbaRlDatasetError("sealed prompt template hash differs from rl-prompt-v1")
+    if template_hash != prompt_template_sha256(version):
+        raise NbaRlDatasetError("sealed prompt template hash differs from the sealed version")
     files = require_object(required_field(manifest, "files"), "files")
     for name in (PROMPTS_FILENAME, ANSWERS_FILENAME):
         entry = require_object(required_field(files, name), name)
@@ -203,19 +243,23 @@ def _manifest(
     rows: list[PrototypeGameRow],
     prompts_path: Path,
     answers_path: Path,
+    version: str,
 ) -> dict[str, object]:
     seasons: dict[str, dict[str, int]] = {}
     for row in rows:
         entry = seasons.setdefault(str(row.season), {"games": 0, "prompts": 0})
         entry["games"] += 1
         entry["prompts"] += 2
+    answer_field = (
+        RL_ANSWER_FIELD_V2 if version == RL_PROMPT_TEMPLATE_VERSION_V2 else RL_ANSWER_FIELD
+    )
     return {
         "schema_version": RL_DATASET_SCHEMA_VERSION,
-        "prompt_template_version": RL_PROMPT_TEMPLATE_VERSION,
-        "prompt_template_sha256": prompt_template_sha256(),
+        "prompt_template_version": version,
+        "prompt_template_sha256": prompt_template_sha256(version),
         "candidate_labels": [TEAM_LABEL, OPPONENT_LABEL],
         "elo_field": RL_ELO_FIELD,
-        "answer_field": RL_ANSWER_FIELD,
+        "answer_field": answer_field,
         "orientations_per_game": [ORIGINAL_ORIENTATION, SWAPPED_ORIENTATION],
         "total_games": len(rows),
         "total_prompts": 2 * len(rows),

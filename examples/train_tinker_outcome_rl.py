@@ -16,10 +16,10 @@ import argparse
 import asyncio
 import json
 import os
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from math import exp
 from pathlib import Path
 
 import tinker
@@ -36,13 +36,16 @@ from forecastfm.json_utils import (
 )
 from forecastfm.local_config import read_tinker_api_key
 
-DATASET_DIR = Path("data/processed/rl_dataset")
+DATASET_DIR = Path("data/processed/rl_dataset_v2")
 PROTOCOL_PATH = Path("prospective/RL_RUN_PROTOCOL.md")
 ARTIFACTS_DIR = Path("artifacts/tinker")
 TEAM_TOKEN = 197467
 OTHER_TOKEN = 60669
 RENDERER_NAME = "gpt_oss_low_reasoning"
 BASE_MODEL = "openai/gpt-oss-120b"
+TEMPLATE_VERSION = "rl-prompt-v2"
+FINAL_CHANNEL_MARKER = "<|channel|>final<|message|>"
+PROBABILITY_PATTERN = re.compile(r"(0(?:\.\d+)?|1(?:\.0+)?)")
 
 
 class NbaRlRunError(RuntimeError):
@@ -59,9 +62,9 @@ class RlRunConfig:
     batch_size: int = 64
     group_size: int = 8
     temperature: float = 1.0
-    max_tokens: int = 128
+    max_tokens: int = 192
     seed: int = 20260720
-    max_calls: int = 64_000
+    max_calls: int = 8_000
     concurrency: int = 32
     max_prompt_tokens: int = 1_024
     max_steps: int | None = None
@@ -88,8 +91,7 @@ class RlRunConfig:
             "max_steps": self.max_steps,
             "renderer": RENDERER_NAME,
             "base_model": BASE_MODEL,
-            "team_token": TEAM_TOKEN,
-            "other_token": OTHER_TOKEN,
+            "template_version": TEMPLATE_VERSION,
         }
 
 
@@ -108,8 +110,7 @@ class RlQuestion:
 class _Rollout:
     completion_tokens: list[int]
     completion_logprobs: list[float]
-    label_index: int | None
-    probability_team: float
+    stated_probability: float | None
     reward: float
     advantage: float = 0.0
 
@@ -126,7 +127,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     rendered = _render_all(questions, config)
     artifact_dir = _write_run_lock(config, len(questions))
     journal = artifact_dir / "journal.jsonl"
-    result = asyncio.run(_run(config, questions, rendered, artifact_dir, journal))
+    context = _RunContext(
+        questions=questions,
+        rendered=rendered,
+        artifact_dir=artifact_dir,
+        journal=journal,
+        tokenizer=get_tokenizer(BASE_MODEL),
+    )
+    result = asyncio.run(_run(config, context))
     _write_experiment_seal(config, artifact_dir, result)
     print(json.dumps(result, indent=2))
     return 0
@@ -210,12 +218,20 @@ def _write_run_lock(config: RlRunConfig, question_count: int) -> Path:
     return artifact_dir
 
 
+@dataclass(slots=True)
+class _RunContext:
+    """Shared immutable inputs for one RL run."""
+
+    questions: list[RlQuestion]
+    rendered: dict[str, tinker.ModelInput]
+    artifact_dir: Path
+    journal: Path
+    tokenizer: object
+
+
 async def _run(
     config: RlRunConfig,
-    questions: list[RlQuestion],
-    rendered: dict[str, tinker.ModelInput],
-    artifact_dir: Path,
-    journal: Path,
+    context: _RunContext,
 ) -> dict[str, object]:
     api_key = read_tinker_api_key(Path(".env"))
     os.environ["TINKER_API_KEY"] = api_key
@@ -235,15 +251,20 @@ async def _run(
         sampler = service_client.create_sampling_client(model_path=sampler_weights.path)
         if step in {25, 50, 75, 100}:
             checkpoints.append(sampler_weights.path)
-        batch = _batch_for_step(questions, step, config)
-        rollouts, calls = await _rollout_batch(batch, rendered, sampler, config)
+        batch = _batch_for_step(context.questions, step, config)
+        rollouts, calls = await _rollout_batch(
+            batch, context.rendered, sampler, config, context.tokenizer
+        )
         call_count += calls
         if call_count > config.max_calls:
-            _journal(journal, {"step": step, "aborted": "call cap exceeded", "calls": call_count})
+            _journal(
+                context.journal,
+                {"step": step, "aborted": "call cap exceeded", "calls": call_count},
+            )
             raise NbaRlRunError(f"call cap exceeded at step {step}: {call_count}")
         _assign_advantages(rollouts)
         datums = [
-            _datum(rollout, rendered[rollout_question])
+            _datum(rollout, context.rendered[rollout_question])
             for rollout_question, rollout in rollouts
             for rollout in rollout
         ]
@@ -254,7 +275,7 @@ async def _run(
         )
         await optim_future.result_async()
         metrics = _step_metrics(step, rollouts, call_count)
-        _journal(journal, metrics)
+        _journal(context.journal, metrics)
         step_metrics.append(metrics)
     final_future = await training_client.save_weights_for_sampler_async("rl-final")
     final_saved = await final_future.result_async()
@@ -281,6 +302,7 @@ async def _rollout_batch(
     rendered: dict[str, tinker.ModelInput],
     sampler: tinker.SamplingClient,
     config: RlRunConfig,
+    tokenizer: object,
 ) -> tuple[list[tuple[str, list[_Rollout]]], int]:
     semaphore = asyncio.Semaphore(config.concurrency)
 
@@ -295,23 +317,17 @@ async def _rollout_batch(
                     temperature=config.temperature,
                 ),
             )
-        rollouts = await _rollouts_from_response(
-            question, response, sampler, rendered[question.question_id].to_ints()
-        )
+        rollouts = await _rollouts_from_response(question, response, tokenizer)
         return question.question_id, rollouts
 
     results = await asyncio.gather(*(one(question) for question in batch))
-    calls = len(batch) + sum(
-        1 for _question_id, group in results for rollout in group if rollout.label_index is not None
-    )
-    return list(results), calls
+    return list(results), len(batch)
 
 
 async def _rollouts_from_response(
     question: RlQuestion,
     response: tinker.SampleResponse,
-    sampler: tinker.SamplingClient,
-    prompt_tokens: list[int],
+    tokenizer: object,
 ) -> list[_Rollout]:
     target = 1.0 if question.winner == "TEAM" else 0.0
     rollouts: list[_Rollout] = []
@@ -320,59 +336,34 @@ async def _rollouts_from_response(
         logprobs = list(sequence.logprobs or [])
         if len(logprobs) != len(tokens):
             raise NbaRlRunError("sampled sequence is missing logprobs")
+        stated = _parse_stated_probability(_decode(tokenizer, tokens))
+        reward = 0.0 if stated is None else 1.0 - (stated - target) ** 2
         rollouts.append(
             _Rollout(
                 completion_tokens=tokens,
                 completion_logprobs=logprobs,
-                label_index=_label_index(tokens),
-                probability_team=0.0,
-                reward=0.0,
+                stated_probability=stated,
+                reward=reward,
             )
         )
-    await asyncio.gather(
-        *(
-            _score_rollout(sampler, prompt_tokens, rollout, target)
-            for rollout in rollouts
-            if rollout.label_index is not None
-        )
-    )
     return rollouts
 
 
-async def _score_rollout(
-    sampler: tinker.SamplingClient,
-    prompt_tokens: list[int],
-    rollout: _Rollout,
-    target: float,
-) -> None:
-    """Compute the per-rollout TEAM probability and Brier reward from its own label position."""
-    index = rollout.label_index
-    if index is None:
-        return
-    sampled_token = rollout.completion_tokens[index]
-    sampled_logprob = rollout.completion_logprobs[index]
-    other_token = OTHER_TOKEN if sampled_token == TEAM_TOKEN else TEAM_TOKEN
-    scoring_input = tinker.ModelInput.from_ints(
-        prompt_tokens + rollout.completion_tokens[:index] + [other_token]
-    )
-    logprobs = await sampler.compute_logprobs_async(scoring_input)
-    other_logprob = logprobs[-1]
-    if other_logprob is None:
-        raise NbaRlRunError("counterfactual scoring returned no logprob")
-    if sampled_token == TEAM_TOKEN:
-        probability_team = exp(sampled_logprob) / (exp(sampled_logprob) + exp(other_logprob))
-    else:
-        probability_team = exp(other_logprob) / (exp(other_logprob) + exp(sampled_logprob))
-    rollout.probability_team = probability_team
-    rollout.reward = 1.0 - (probability_team - target) ** 2
+def _parse_stated_probability(text: str) -> float | None:
+    """Extract the stated win probability from the completion's final channel."""
+    tail = text.rsplit(FINAL_CHANNEL_MARKER, 1)[-1]
+    match = PROBABILITY_PATTERN.search(tail)
+    if match is None:
+        return None
+    value = float(match.group(1))
+    return value if 0.0 <= value <= 1.0 else None
 
 
-def _label_index(tokens: list[int]) -> int | None:
-    """Return the index of the last TEAM or OTHER token, or None when absent."""
-    for index in range(len(tokens) - 1, -1, -1):
-        if tokens[index] in (TEAM_TOKEN, OTHER_TOKEN):
-            return index
-    return None
+def _decode(tokenizer: object, tokens: list[int]) -> str:
+    decode = getattr(tokenizer, "decode", None)
+    if not callable(decode):
+        raise NbaRlRunError("tokenizer cannot decode completions")
+    return str(decode(tokens))
 
 
 def _assign_advantages(groups: list[tuple[str, list[_Rollout]]]) -> None:
@@ -407,13 +398,18 @@ def _step_metrics(
 ) -> dict[str, object]:
     flat = [rollout for _question_id, rollouts in groups for rollout in rollouts]
     mean_reward = sum(rollout.reward for rollout in flat) / len(flat)
-    mean_p = sum(rollout.probability_team for rollout in flat) / len(flat)
-    label_rate = sum(1 for rollout in flat if rollout.label_index is not None) / len(flat)
+    stated = [
+        rollout.stated_probability for rollout in flat if rollout.stated_probability is not None
+    ]
+    mean_p = sum(stated) / len(stated) if stated else 0.0
+    variance = sum((value - mean_p) ** 2 for value in stated) / len(stated) if stated else 0.0
+    parse_rate = len(stated) / len(flat)
     return {
         "step": step,
         "mean_reward": mean_reward,
         "mean_probability_team": mean_p,
-        "valid_label_rate": label_rate,
+        "stated_probability_variance": variance,
+        "parse_rate": parse_rate,
         "calls": call_count,
     }
 
