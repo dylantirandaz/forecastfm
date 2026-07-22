@@ -70,9 +70,9 @@ class RlRunConfig:
     max_steps: int | None = None
 
     def estimated_calls(self) -> int:
-        """Return the estimated sampling calls for the configured run."""
+        """Return the estimated sampling calls for the configured run (one per question)."""
         steps = self.max_steps or self.steps
-        return steps * self.batch_size * (1 + self.group_size)
+        return steps * self.batch_size
 
     def canonical_payload(self) -> dict[str, object]:
         """Return the exact config covered by the run-lock hash."""
