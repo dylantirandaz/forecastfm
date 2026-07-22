@@ -123,13 +123,26 @@ def map_abbreviation(espn_abbreviation: str) -> str:
 
 def parse_scoreboard(payload: bytes) -> list[EspnGameRef]:
     """Extract event references from one ESPN scoreboard document."""
+    return _parse_scoreboard_events(payload, keep_completed=True)
+
+
+def parse_upcoming_scoreboard(payload: bytes) -> list[EspnGameRef]:
+    """Extract scheduled (not-yet-completed) event references from one scoreboard.
+
+    The prospective collector polls future days, whose events are never completed; using
+    the completed-only parser there yields an empty schedule, so no cutoffs ever come due.
+    """
+    return _parse_scoreboard_events(payload, keep_completed=False)
+
+
+def _parse_scoreboard_events(payload: bytes, *, keep_completed: bool) -> list[EspnGameRef]:
     document = parse_json_object(payload.decode("utf-8"))
     references: list[EspnGameRef] = []
     for event in require_list(required_field(document, "events"), "events"):
         event_object = require_object(event, "event")
         status = require_object(event_object.get("status", {}), "status")
         status_type = require_object(status.get("type", {}), "status.type")
-        if status_type.get("completed") is not True:
+        if (status_type.get("completed") is True) is not keep_completed:
             continue
         away_abbr, home_abbr = _competitors(event_object)
         if away_abbr not in NBA_TEAM_ABBREVIATIONS or home_abbr not in NBA_TEAM_ABBREVIATIONS:

@@ -334,7 +334,7 @@ async def _rollouts_from_response(
         logprobs = list(sequence.logprobs or [])
         if len(logprobs) != len(tokens):
             raise NbaRlRunError("sampled sequence is missing logprobs")
-        stated = _parse_stated_probability(_decode(tokenizer, tokens))
+        stated = parse_stated_probability(_decode(tokenizer, tokens))
         reward = 0.0 if stated is None else 1.0 - (stated - target) ** 2
         rollouts.append(
             _Rollout(
@@ -347,7 +347,7 @@ async def _rollouts_from_response(
     return rollouts
 
 
-def _parse_stated_probability(text: str) -> float | None:
+def parse_stated_probability(text: str) -> float | None:
     """Extract the stated win probability from the post-thinking answer segment."""
     if THINK_CLOSE_MARKER in text:
         tail = text.rsplit(THINK_CLOSE_MARKER, 1)[-1]

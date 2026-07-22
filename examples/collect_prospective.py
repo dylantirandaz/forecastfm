@@ -37,7 +37,7 @@ from forecastfm.json_utils import (
     required_field,
 )
 from forecastfm.ledger import GENESIS_HASH
-from forecastfm.nba_espn import EspnGameRef, parse_scoreboard
+from forecastfm.nba_espn import EspnGameRef, parse_upcoming_scoreboard
 from forecastfm.nba_injury_report import ET_ZONE
 
 type JsonObject = dict[str, object]
@@ -222,7 +222,7 @@ def _poll_schedule(
             raise ProspectiveCollectorError(f"ESPN scoreboard returned no document for {day}")
         target = context.root / poll_date.isoformat() / f"poll-scoreboard-{day.isoformat()}.json"
         data = _ensure_create_only(target, payload)
-        references.extend(parse_scoreboard(data))
+        references.extend(parse_upcoming_scoreboard(data))
         payloads.append(
             {
                 "date": day.isoformat(),
